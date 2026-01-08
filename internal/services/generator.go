@@ -45,11 +45,18 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 		return 0, 0, fmt.Errorf("failed to parse tag_list.json: %w", err)
 	}
 
-	// Parse tags
-	tags := strings.Split(tagList.TagList, ",")
+	// Parse tags (support both "tag_list" and "tag" keys)
+	tagListStr := tagList.GetTagList()
+	if tagListStr == "" {
+		return 0, 0, fmt.Errorf("no tags found in tag_list.json (check 'tag_list' or 'tag' key)")
+	}
+	
+	tags := strings.Split(tagListStr, ",")
 	for i, tag := range tags {
 		tags[i] = strings.TrimSpace(tag)
 	}
+	
+	fmt.Printf("[GENERATE] Parsed %d tags from tag list\n", len(tags))
 
 	// Time range: 2025-12-01 00:00:00 to 2026-01-31 23:59:59
 	startTime := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
