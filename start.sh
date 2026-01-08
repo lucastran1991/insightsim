@@ -8,9 +8,29 @@ set -e  # Exit on error
 # Configuration
 APP_NAME="insightsim"
 BINARY_NAME="server"
-DB_PATH="${DB_PATH:-insightsim.db}"
-PORT="${PORT:-8080}"
+CONFIG_FILE="${CONFIG_FILE:-config.json}"
 BUILD_ON_START="${BUILD_ON_START:-true}"
+
+# Load config from config.json if exists
+if [ -f "$CONFIG_FILE" ]; then
+    # Try to use jq if available
+    if command -v jq &> /dev/null; then
+        DB_PATH="${DB_PATH:-$(jq -r '.database.path // "insightsim.db"' "$CONFIG_FILE")}"
+        PORT="${PORT:-$(jq -r '.server.port // "8080"' "$CONFIG_FILE")}"
+    # Fallback to grep/sed if jq not available
+    elif command -v python3 &> /dev/null; then
+        DB_PATH="${DB_PATH:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('database', {}).get('path', 'insightsim.db'))" 2>/dev/null || echo "insightsim.db")}"
+        PORT="${PORT:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('server', {}).get('port', '8080'))" 2>/dev/null || echo "8080")}"
+    else
+        # Simple grep fallback (less reliable)
+        DB_PATH="${DB_PATH:-$(grep -o '"path"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "insightsim.db")}"
+        PORT="${PORT:-$(grep -o '"port"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*"port"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "8080")}"
+    fi
+else
+    # Defaults if config file doesn't exist
+    DB_PATH="${DB_PATH:-insightsim.db}"
+    PORT="${PORT:-8080}"
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -43,15 +63,17 @@ Usage: $0 [OPTIONS]
 Start Insightsim backend server.
 
 Options:
-    -p, --port PORT          Server port (default: 8080)
-    -d, --db PATH            Database file path (default: insightsim.db)
+    -c, --config FILE        Config file path (default: config.json)
+    -p, --port PORT          Server port (overrides config)
+    -d, --db PATH            Database file path (overrides config)
     -b, --no-build           Skip building the application
     -r, --run-only           Run without building (use existing binary)
     -h, --help               Show this help message
 
 Environment Variables:
-    PORT                     Server port
-    DB_PATH                  Database file path
+    CONFIG_FILE              Config file path (default: config.json)
+    PORT                     Server port (overrides config)
+    DB_PATH                  Database file path (overrides config)
     BUILD_ON_START           Build before start (default: true)
 
 Examples:
@@ -70,6 +92,20 @@ RUN_ONLY=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -c|--config)
+            CONFIG_FILE="$2"
+            shift 2
+            # Reload config after changing config file
+            if [ -f "$CONFIG_FILE" ]; then
+                if command -v jq &> /dev/null; then
+                    DB_PATH="${DB_PATH:-$(jq -r '.database.path // "insightsim.db"' "$CONFIG_FILE")}"
+                    PORT="${PORT:-$(jq -r '.server.port // "8080"' "$CONFIG_FILE")}"
+                elif command -v python3 &> /dev/null; then
+                    DB_PATH="${DB_PATH:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('database', {}).get('path', 'insightsim.db'))" 2>/dev/null || echo "insightsim.db")}"
+                    PORT="${PORT:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('server', {}).get('port', '8080'))" 2>/dev/null || echo "8080")}"
+                fi
+            fi
+            ;;
         -p|--port)
             PORT="$2"
             shift 2
@@ -174,5 +210,5 @@ else
     exit 1
 fi
 
-# Start the server
-exec "$BINARY" -db "$DB_PATH" -port "$PORT"
+# Start the server with config file
+exec "$BINARY" -config "$CONFIG_FILE" -db "$DB_PATH" -port "$PORT"

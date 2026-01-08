@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"insightsim/internal/config"
 	"insightsim/internal/database"
 	"insightsim/internal/handlers"
 	"insightsim/internal/services"
@@ -15,28 +16,43 @@ import (
 
 func main() {
 	// Parse command line flags
-	dbPath := flag.String("db", "insightsim.db", "Path to SQLite database file")
-	port := flag.String("port", "8080", "Server port")
+	configPath := flag.String("config", "config.json", "Path to config file")
+	dbPath := flag.String("db", "", "Path to SQLite database file (overrides config)")
+	port := flag.String("port", "", "Server port (overrides config)")
 	flag.Parse()
 
+	// Load configuration
+	cfg, err := config.LoadConfigWithDefaults(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Override with command line flags if provided
+	if *dbPath != "" {
+		cfg.Database.Path = *dbPath
+	}
+	if *port != "" {
+		cfg.Server.Port = *port
+	}
+
 	// Initialize database
-	db, err := database.NewDB(*dbPath)
+	db, err := database.NewDB(cfg.Database.Path)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
 
-	log.Printf("Database initialized at: %s", *dbPath)
+	log.Printf("Database initialized at: %s", cfg.Database.Path)
 
 	// Initialize services
 	loader := services.NewLoader(db)
 	queryService := services.NewQueryService(db)
 	generator := services.NewGenerator(db)
 
-	// Initialize handlers
-	loadHandler := handlers.NewLoadHandler(loader)
+	// Initialize handlers with config
+	loadHandler := handlers.NewLoadHandler(loader, cfg.Data.RawDataFolder)
 	queryHandler := handlers.NewQueryHandler(queryService)
-	generatorHandler := handlers.NewGeneratorHandler(generator)
+	generatorHandler := handlers.NewGeneratorHandler(generator, cfg.Data.TagListFile)
 
 	// Setup router
 	router := mux.NewRouter()
@@ -55,8 +71,8 @@ func main() {
 	}).Methods("GET")
 
 	// Start server
-	addr := fmt.Sprintf(":%s", *port)
-	log.Printf("Server starting on port %s", *port)
+	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
+	log.Printf("Server starting on %s", addr)
 	log.Printf("API endpoints:")
 	log.Printf("  POST /api/load")
 	log.Printf("  POST /api/generate-dummy")

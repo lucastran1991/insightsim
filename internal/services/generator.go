@@ -25,9 +25,9 @@ func NewGenerator(db *database.DB) *Generator {
 }
 
 // GenerateDummyData generates dummy data for all tags from tag_list.json
-func (g *Generator) GenerateDummyData() (int, int, error) {
-	// Read tag_list.json
-	tagListPath := filepath.Join("raw_data", "tag_list.json")
+func (g *Generator) GenerateDummyData(tagListFile string) (int, int, error) {
+	// Read tag_list.json from config
+	tagListPath := tagListFile
 	if !filepath.IsAbs(tagListPath) {
 		tagListPath = filepath.Join(".", tagListPath)
 	}

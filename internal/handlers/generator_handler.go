@@ -9,12 +9,16 @@ import (
 
 // GeneratorHandler handles POST /api/generate-dummy requests
 type GeneratorHandler struct {
-	generator *services.Generator
+	generator    *services.Generator
+	tagListFile  string
 }
 
 // NewGeneratorHandler creates a new GeneratorHandler instance
-func NewGeneratorHandler(generator *services.Generator) *GeneratorHandler {
-	return &GeneratorHandler{generator: generator}
+func NewGeneratorHandler(generator *services.Generator, tagListFile string) *GeneratorHandler {
+	return &GeneratorHandler{
+		generator:   generator,
+		tagListFile: tagListFile,
+	}
 }
 
 // GenerateResponse represents the response from generate-dummy endpoint
@@ -32,7 +36,7 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, tagsCount, err := h.generator.GenerateDummyData()
+	count, tagsCount, err := h.generator.GenerateDummyData(h.tagListFile)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)

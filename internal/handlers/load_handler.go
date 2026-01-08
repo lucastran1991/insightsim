@@ -9,12 +9,16 @@ import (
 
 // LoadHandler handles POST /api/load requests
 type LoadHandler struct {
-	loader *services.Loader
+	loader        *services.Loader
+	rawDataFolder string
 }
 
 // NewLoadHandler creates a new LoadHandler instance
-func NewLoadHandler(loader *services.Loader) *LoadHandler {
-	return &LoadHandler{loader: loader}
+func NewLoadHandler(loader *services.Loader, rawDataFolder string) *LoadHandler {
+	return &LoadHandler{
+		loader:        loader,
+		rawDataFolder: rawDataFolder,
+	}
 }
 
 // LoadRequest represents the request body for load endpoint
@@ -37,8 +41,8 @@ func (h *LoadHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load all JSON files from raw_data folder
-	count, filesCount, err := h.loader.LoadFromFolder("raw_data")
+	// Load all JSON files from configured folder
+	count, filesCount, err := h.loader.LoadFromFolder(h.rawDataFolder)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)

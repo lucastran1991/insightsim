@@ -1,0 +1,13 @@
+{
+  "server": {
+    "port": "8080",
+    "host": "0.0.0.0"
+  },
+  "database": {
+    "path": "insightsim.db"
+  },
+  "data": {
+    "raw_data_folder": "raw_data",
+    "tag_list_file": "raw_data/tag_list.json"
+  }
+}

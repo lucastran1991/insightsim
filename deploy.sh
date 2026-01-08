@@ -158,6 +158,7 @@ cp -r raw_data "$TEMP_DIR/" 2>/dev/null || log_warn "raw_data directory not foun
 cp go.mod go.sum "$TEMP_DIR/" 2>/dev/null || log_warn "go.mod/go.sum not found, skipping"
 cp -r cmd "$TEMP_DIR/" 2>/dev/null || log_warn "cmd directory not found, skipping"
 cp -r internal "$TEMP_DIR/" 2>/dev/null || log_warn "internal directory not found, skipping"
+cp config.json "$TEMP_DIR/" 2>/dev/null || cp config.json.example "$TEMP_DIR/config.json" 2>/dev/null || log_warn "config.json not found, will use defaults"
 
 # Create deployment script
 cat > "$TEMP_DIR/setup.sh" << 'SETUP_EOF'

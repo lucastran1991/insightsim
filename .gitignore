@@ -53,6 +53,10 @@ data/
 .env.local
 .env.*.local
 
+# Config files (keep example)
+config.json
+!config.json.example
+
 # Log files
 *.log
 logs/
