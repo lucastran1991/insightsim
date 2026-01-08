@@ -233,16 +233,38 @@ else
     log_info "Skipping build (using existing binary)"
 fi
 
-# Check if port is already in use
+# Check if port is already in use and kill the process
 log_step "Checking if port $PORT is available..."
 if command -v lsof &> /dev/null; then
-    if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
-        log_warn "Port $PORT is already in use"
-        log_info "You can:"
-        log_info "  1. Use a different port: $0 -p 3000"
-        log_info "  2. Kill the process using port $PORT"
-        log_info "  3. Check what's using it: lsof -i :$PORT"
-        exit 1
+    PID=$(lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null)
+    if [ -n "$PID" ]; then
+        log_warn "Port $PORT is already in use by process $PID"
+        log_info "Killing process $PID to free up port $PORT..."
+        kill -9 "$PID" 2>/dev/null || true
+        sleep 1
+        
+        # Verify port is now free
+        if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+            log_error "Failed to kill process on port $PORT"
+            log_info "You can manually kill it: kill -9 $PID"
+            exit 1
+        else
+            log_info "Port $PORT is now available"
+        fi
+    else
+        log_info "Port $PORT is available"
+    fi
+elif command -v netstat &> /dev/null; then
+    # Fallback for systems without lsof (some Linux distros)
+    PID=$(netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1)
+    if [ -n "$PID" ] && [ "$PID" != "-" ]; then
+        log_warn "Port $PORT is already in use by process $PID"
+        log_info "Killing process $PID to free up port $PORT..."
+        kill -9 "$PID" 2>/dev/null || true
+        sleep 1
+        log_info "Port $PORT should now be available"
+    else
+        log_info "Port $PORT is available"
     fi
 fi
 
