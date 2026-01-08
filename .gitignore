@@ -18,9 +18,14 @@ vendor/
 go.work
 
 # Application binaries
-server
-insightsim
-insightsim.exe
+# Only ignore binaries in root directory, not cmd/server/ directory
+/server$
+/insightsim$
+/insightsim.exe$
+# Explicitly allow cmd/server/ directory and its contents
+!cmd/
+!cmd/server/
+!cmd/server/**
 
 # Database files
 *.db
