@@ -156,6 +156,8 @@ DEPLOY_PACKAGE="$TEMP_DIR/deploy.tar.gz"
 cp "$APP_NAME" "$TEMP_DIR/"
 cp -r raw_data "$TEMP_DIR/" 2>/dev/null || log_warn "raw_data directory not found, skipping"
 cp go.mod go.sum "$TEMP_DIR/" 2>/dev/null || log_warn "go.mod/go.sum not found, skipping"
+cp -r cmd "$TEMP_DIR/" 2>/dev/null || log_warn "cmd directory not found, skipping"
+cp -r internal "$TEMP_DIR/" 2>/dev/null || log_warn "internal directory not found, skipping"
 
 # Create deployment script
 cat > "$TEMP_DIR/setup.sh" << 'SETUP_EOF'
