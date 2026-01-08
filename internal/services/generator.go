@@ -139,11 +139,15 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 			newValue := currentValue * (1 + changePercent)
 
 			// Clamp value to configured range [minValue, maxValue]
+			wasClamped := false
+			originalValue := newValue
 			if newValue < minValue {
 				newValue = minValue
+				wasClamped = true
 			}
 			if newValue > maxValue {
 				newValue = maxValue
+				wasClamped = true
 			}
 
 			quality := 3 // Fixed quality value
@@ -161,6 +165,14 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 					}
 					totalRecords++
 					tagRecords++
+					
+					// Log every record generated
+					clampInfo := ""
+					if wasClamped {
+						clampInfo = fmt.Sprintf(" [CLAMPED: %.2f -> %.2f]", originalValue, newValue)
+					}
+					fmt.Printf("[GENERATE] INSERT tag=%s timestamp=%s value=%.2f quality=%d%s\n",
+						tag, currentTime.Format("2006-01-02T15:04:05"), newValue, quality, clampInfo)
 				} else {
 					return 0, 0, fmt.Errorf("failed to check existing record: %w", err)
 				}
@@ -174,6 +186,18 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 					}
 					totalRecords++
 					tagRecords++
+					
+					// Log every record generated
+					clampInfo := ""
+					if wasClamped {
+						clampInfo = fmt.Sprintf(" [CLAMPED: %.2f -> %.2f]", originalValue, newValue)
+					}
+					fmt.Printf("[GENERATE] UPDATE tag=%s timestamp=%s value=%.2f quality=%d%s\n",
+						tag, currentTime.Format("2006-01-02T15:04:05"), newValue, quality, clampInfo)
+				} else {
+					// Log skipped record (lower quality)
+					fmt.Printf("[GENERATE] SKIP tag=%s timestamp=%s (existing quality %d >= new quality %d)\n",
+						tag, currentTime.Format("2006-01-02T15:04:05"), existingQuality, quality)
 				}
 			}
 
