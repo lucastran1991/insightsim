@@ -68,6 +68,9 @@ Options:
     -d, --db PATH            Database file path (overrides config)
     -b, --no-build           Skip building the application
     -r, --run-only           Run without building (use existing binary)
+    -s, --stop               Stop the PM2 process
+    -R, --restart            Restart the PM2 process
+    -l, --logs               Show PM2 logs
     -h, --help               Show this help message
 
 Environment Variables:
@@ -77,10 +80,12 @@ Environment Variables:
     BUILD_ON_START           Build before start (default: true)
 
 Examples:
-    $0
-    $0 -p 3000
-    $0 -d myapp.db -p 8080
-    $0 --no-build
+    $0                       # Start server with PM2
+    $0 -p 3000                # Start on port 3000
+    $0 --no-build             # Start without building
+    $0 --stop                 # Stop PM2 process
+    $0 --restart              # Restart PM2 process
+    $0 --logs                 # View logs
     PORT=3000 DB_PATH=dev.db $0
 
 EOF
@@ -89,6 +94,7 @@ EOF
 # Parse arguments
 SKIP_BUILD=false
 RUN_ONLY=false
+ACTION="start"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -123,6 +129,18 @@ while [[ $# -gt 0 ]]; do
             SKIP_BUILD=true
             shift
             ;;
+        -s|--stop)
+            ACTION="stop"
+            shift
+            ;;
+        -R|--restart)
+            ACTION="restart"
+            shift
+            ;;
+        -l|--logs)
+            ACTION="logs"
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -135,6 +153,47 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Handle actions
+if [ "$ACTION" = "stop" ]; then
+    if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
+        log_info "Stopping $APP_NAME..."
+        pm2 stop "$APP_NAME"
+        pm2 delete "$APP_NAME"
+        log_info "Stopped successfully"
+    else
+        log_warn "Process $APP_NAME not found in PM2"
+    fi
+    exit 0
+fi
+
+if [ "$ACTION" = "restart" ]; then
+    if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
+        log_info "Restarting $APP_NAME..."
+        pm2 restart "$APP_NAME"
+        log_info "Restarted successfully"
+        pm2 status "$APP_NAME"
+    else
+        log_error "Process $APP_NAME not found in PM2. Use './start.sh' to start it first."
+        exit 1
+    fi
+    exit 0
+fi
+
+if [ "$ACTION" = "logs" ]; then
+    if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
+        pm2 logs "$APP_NAME"
+    else
+        log_warn "Process $APP_NAME not found in PM2"
+        if [ -f "out.log" ]; then
+            log_info "Showing out.log file:"
+            tail -f out.log
+        else
+            log_error "No logs found"
+        fi
+    fi
+    exit 0
+fi
+
 # Check if Go is installed
 log_step "Checking prerequisites..."
 if ! command -v go &> /dev/null; then
@@ -142,6 +201,14 @@ if ! command -v go &> /dev/null; then
     exit 1
 fi
 log_info "Go version: $(go version)"
+
+# Check if PM2 is installed
+if ! command -v pm2 &> /dev/null; then
+    log_error "PM2 is not installed. Please install PM2 first."
+    log_info "Install with: npm install -g pm2"
+    exit 1
+fi
+log_info "PM2 version: $(pm2 --version)"
 
 # Check if binary exists
 BINARY_EXISTS=false
@@ -192,12 +259,10 @@ if [ ! -d "raw_data" ]; then
 fi
 
 # Start server
-log_step "Starting server..."
+log_step "Starting server with PM2..."
 log_info "Database: $DB_PATH"
 log_info "Port: $PORT"
-log_info ""
-log_info "Server will start in the foreground."
-log_info "Press Ctrl+C to stop the server."
+log_info "Config: $CONFIG_FILE"
 log_info ""
 
 # Determine which binary to use
@@ -210,5 +275,67 @@ else
     exit 1
 fi
 
-# Start the server with config file
-exec "$BINARY" -config "$CONFIG_FILE" -db "$DB_PATH" -port "$PORT"
+# Get absolute path for binary
+BINARY_ABS=$(cd "$(dirname "$BINARY")" && pwd)/$(basename "$BINARY")
+WORK_DIR=$(pwd)
+
+# Check if PM2 process already exists
+if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
+    log_warn "PM2 process '$APP_NAME' already exists"
+    log_info "Stopping existing process..."
+    pm2 stop "$APP_NAME" 2>/dev/null || true
+    pm2 delete "$APP_NAME" 2>/dev/null || true
+fi
+
+# Start with PM2
+log_info "Starting $APP_NAME with PM2..."
+pm2 start "$BINARY_ABS" \
+    --name "$APP_NAME" \
+    --cwd "$WORK_DIR" \
+    --log "$WORK_DIR/out.log" \
+    --error "$WORK_DIR/out.log" \
+    --output "$WORK_DIR/out.log" \
+    --merge-logs \
+    --time \
+    -- \
+    -config "$CONFIG_FILE" \
+    -db "$DB_PATH" \
+    -port "$PORT"
+
+# Configure PM2 to write output to out.log and save
+pm2 save --force > /dev/null 2>&1 || true
+
+log_info ""
+log_info "Server started with PM2!"
+log_info ""
+log_info "Useful commands:"
+log_info "  View logs: pm2 logs $APP_NAME"
+log_info "  View logs (file): tail -f out.log"
+log_info "  Status: pm2 status"
+log_info "  Stop: pm2 stop $APP_NAME or ./start.sh --stop"
+log_info "  Restart: pm2 restart $APP_NAME or ./start.sh --restart"
+log_info "  Delete: pm2 delete $APP_NAME"
+log_info ""
+log_info "Output will be written to: out.log"
+log_info ""
+
+# Show initial status
+sleep 2
+pm2 status "$APP_NAME"
+
+# Verify process is running
+if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
+    log_info ""
+    log_info "✓ Process started successfully and is running in background"
+    log_info "✓ Process will continue running even if this script exits"
+    log_info "✓ PM2 will automatically restart the process if it crashes"
+    log_info ""
+    log_info "Process is alive and running. You can safely close this terminal."
+    log_info ""
+    
+    # Exit successfully - process will continue running in PM2
+    exit 0
+else
+    log_error "Failed to start process with PM2"
+    exit 1
+fi
