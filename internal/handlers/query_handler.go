@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -63,6 +64,13 @@ func (h *QueryHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Log request
+	tagsInfo := "all tags"
+	if len(tags) > 0 {
+		tagsInfo = fmt.Sprintf("%d tag(s)", len(tags))
+	}
+	fmt.Printf("[API] GET /api/timeseriesdata - Query: %s to %s, tags: %s\n", startTime, endTime, tagsInfo)
+	
 	// Query the data
 	result, err := h.queryService.QueryTimeseriesData(startTime, endTime, tags)
 	if err != nil {

@@ -37,11 +37,15 @@ func (l *Loader) LoadFromFile(filePath string) (int, error) {
 
 // LoadFromFolder loads all JSON files from a folder into the database
 func (l *Loader) LoadFromFolder(folderPath string) (int, int, error) {
+	startTime := time.Now()
+	
 	// Resolve absolute path if relative
 	if !filepath.IsAbs(folderPath) {
 		folderPath = filepath.Join(".", folderPath)
 	}
 
+	fmt.Printf("[LOAD] Loading data from folder: %s\n", folderPath)
+	
 	// Read all files in folder
 	files, err := os.ReadDir(folderPath)
 	if err != nil {
@@ -62,15 +66,25 @@ func (l *Loader) LoadFromFolder(folderPath string) (int, int, error) {
 			continue
 		}
 
+		fileStartTime := time.Now()
 		filePath := filepath.Join(folderPath, file.Name())
+		fmt.Printf("[LOAD] Processing file: %s\n", file.Name())
+		
 		count, err := l.LoadFromFile(filePath)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to load file %s: %w", file.Name(), err)
 		}
 
+		fileDuration := time.Since(fileStartTime)
+		fmt.Printf("[LOAD] Completed file: %s (%d records, took %v)\n", file.Name(), count, fileDuration.Round(time.Millisecond))
+		
 		totalCount += count
 		filesCount++
 	}
+
+	totalDuration := time.Since(startTime)
+	fmt.Printf("[LOAD] Load completed: %d total records from %d files (total time: %v)\n", 
+		totalCount, filesCount, totalDuration.Round(time.Millisecond))
 
 	return totalCount, filesCount, nil
 }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"insightsim/internal/services"
@@ -40,6 +41,8 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Printf("[API] POST /api/generate-dummy - Starting generation (value range: %.2f-%.2f)\n", h.minValue, h.maxValue)
+	
 	count, tagsCount, err := h.generator.GenerateDummyData(h.tagListFile, h.minValue, h.maxValue)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")

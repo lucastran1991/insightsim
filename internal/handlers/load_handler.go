@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"insightsim/internal/services"
@@ -41,6 +42,8 @@ func (h *LoadHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Printf("[API] POST /api/load - Loading data from folder: %s\n", h.rawDataFolder)
+	
 	// Load all JSON files from configured folder
 	count, filesCount, err := h.loader.LoadFromFolder(h.rawDataFolder)
 	if err != nil {

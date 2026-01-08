@@ -26,12 +26,15 @@ func NewGenerator(db *database.DB) *Generator {
 
 // GenerateDummyData generates dummy data for all tags from tag_list.json
 func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue float64) (int, int, error) {
+	generateStartTime := time.Now()
+	
 	// Read tag_list.json from config
 	tagListPath := tagListFile
 	if !filepath.IsAbs(tagListPath) {
 		tagListPath = filepath.Join(".", tagListPath)
 	}
 
+	fmt.Printf("[GENERATE] Reading tag list from: %s\n", tagListPath)
 	data, err := os.ReadFile(tagListPath)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to read tag_list.json: %w", err)
@@ -57,9 +60,12 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 
 	// Delete all existing records before generating new batch
 	conn := g.db.GetConn()
+	fmt.Printf("[GENERATE] Deleting all existing records...\n")
+	deleteStart := time.Now()
 	if err := g.db.DeleteAllRecords(); err != nil {
 		return 0, 0, fmt.Errorf("failed to delete existing records: %w", err)
 	}
+	fmt.Printf("[GENERATE] Deleted existing records (took %v)\n", time.Since(deleteStart).Round(time.Millisecond))
 
 	tx, err := conn.Begin()
 	if err != nil {
@@ -99,12 +105,18 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 	totalRecords := 0
 	rand.Seed(time.Now().UnixNano())
 
+	// Log generation start
+	fmt.Printf("[GENERATE] Starting generation for %d tags, time range: %s to %s, value range: %.2f-%.2f\n",
+		len(tags), startTime.Format("2006-01-02 15:04:05"), endTime.Format("2006-01-02 15:04:05"), minValue, maxValue)
+
 	// Process each tag
-	for tagIdx, tag := range tags {
+	for _, tag := range tags {
 		if tag == "" {
 			continue
 		}
 
+		tagStartTime := time.Now()
+		tagRecords := 0
 		// Random base value within configured range for this tag
 		baseValue := minValue + rand.Float64()*(maxValue-minValue)
 		currentValue := baseValue
@@ -138,6 +150,7 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 						return 0, 0, fmt.Errorf("failed to insert record for tag %s at %v: %w", tag, currentTime, err)
 					}
 					totalRecords++
+					tagRecords++
 				} else {
 					return 0, 0, fmt.Errorf("failed to check existing record: %w", err)
 				}
@@ -150,6 +163,7 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 						return 0, 0, fmt.Errorf("failed to update record: %w", err)
 					}
 					totalRecords++
+					tagRecords++
 				}
 			}
 
@@ -197,16 +211,19 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 			}
 		}
 
-		// Log progress every 10 tags
-		if (tagIdx+1)%10 == 0 {
-			fmt.Printf("Processed %d/%d tags...\n", tagIdx+1, len(tags))
-		}
+		// Log completion for each tag
+		tagDuration := time.Since(tagStartTime)
+		fmt.Printf("[GENERATE] Completed tag: %s (%d records, took %v)\n", tag, tagRecords, tagDuration.Round(time.Millisecond))
 	}
 
 	// Final commit
 	if err := tx.Commit(); err != nil {
 		return 0, 0, fmt.Errorf("failed to commit final transaction: %w", err)
 	}
+
+	totalDuration := time.Since(generateStartTime)
+	fmt.Printf("[GENERATE] Generation completed: %d total records for %d tags (total time: %v)\n", 
+		totalRecords, len(tags), totalDuration.Round(time.Second))
 
 	return totalRecords, len(tags), nil
 }

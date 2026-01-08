@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"insightsim/internal/database"
@@ -20,6 +21,8 @@ func NewQueryService(db *database.DB) *QueryService {
 
 // QueryTimeseriesData queries data by date range and tags
 func (q *QueryService) QueryTimeseriesData(startTime, endTime string, tags []string) (*models.JSONOutput, error) {
+	queryStartTime := time.Now()
+	
 	// Parse start and end timestamps
 	startTimestamp, err := parseTimestampToMillis(startTime)
 	if err != nil {
@@ -34,6 +37,17 @@ func (q *QueryService) QueryTimeseriesData(startTime, endTime string, tags []str
 	if startTimestamp > endTimestamp {
 		return nil, fmt.Errorf("start time must be before or equal to end time")
 	}
+
+	// Log query parameters
+	tagsInfo := "all tags"
+	if len(tags) > 0 {
+		if len(tags) <= 3 {
+			tagsInfo = strings.Join(tags, ", ")
+		} else {
+			tagsInfo = fmt.Sprintf("%d tags (%s, ...)", len(tags), strings.Join(tags[:3], ", "))
+		}
+	}
+	fmt.Printf("[QUERY] Querying data: time range %s to %s, tags: %s\n", startTime, endTime, tagsInfo)
 
 	conn := q.db.GetConn()
 
@@ -94,6 +108,16 @@ func (q *QueryService) QueryTimeseriesData(startTime, endTime string, tags []str
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
+
+	// Count total records
+	totalRecords := 0
+	for _, dataPoints := range result {
+		totalRecords += len(dataPoints)
+	}
+
+	queryDuration := time.Since(queryStartTime)
+	fmt.Printf("[QUERY] Query completed: %d records from %d tags (took %v)\n", 
+		totalRecords, len(result), queryDuration.Round(time.Millisecond))
 
 	return &models.JSONOutput{Result: result}, nil
 }
