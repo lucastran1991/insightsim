@@ -39,6 +39,15 @@ func (db *DB) GetConn() *sql.DB {
 	return db.conn
 }
 
+// DeleteAllRecords deletes all records from insight_raws table
+func (db *DB) DeleteAllRecords() error {
+	_, err := db.conn.Exec("DELETE FROM insight_raws")
+	if err != nil {
+		return fmt.Errorf("failed to delete all records: %w", err)
+	}
+	return nil
+}
+
 // migrate creates the necessary tables if they don't exist
 func (db *DB) migrate() error {
 	query := `

@@ -26,8 +26,15 @@ type DatabaseConfig struct {
 
 // DataConfig represents data configuration
 type DataConfig struct {
-	RawDataFolder string `json:"raw_data_folder"`
-	TagListFile   string `json:"tag_list_file"`
+	RawDataFolder string      `json:"raw_data_folder"`
+	TagListFile   string      `json:"tag_list_file"`
+	ValueRange    *ValueRange `json:"value_range,omitempty"`
+}
+
+// ValueRange represents the range for random value generation
+type ValueRange struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
 }
 
 // LoadConfig loads configuration from a JSON file
@@ -65,6 +72,17 @@ func LoadConfig(configPath string) (*Config, error) {
 	if config.Data.TagListFile == "" {
 		config.Data.TagListFile = "raw_data/tag_list.json"
 	}
+	// Set default value range if not specified
+	if config.Data.ValueRange == nil {
+		config.Data.ValueRange = &ValueRange{
+			Min: 1.0,
+			Max: 255.0,
+		}
+	}
+	// Validate value range
+	if config.Data.ValueRange.Min >= config.Data.ValueRange.Max {
+		return nil, fmt.Errorf("invalid value range: min (%f) must be less than max (%f)", config.Data.ValueRange.Min, config.Data.ValueRange.Max)
+	}
 
 	return &config, nil
 }
@@ -90,6 +108,10 @@ func LoadConfigWithDefaults(configPath string) (*Config, error) {
 				Data: DataConfig{
 					RawDataFolder: "raw_data",
 					TagListFile:   "raw_data/tag_list.json",
+					ValueRange: &ValueRange{
+						Min: 1.0,
+						Max: 255.0,
+					},
 				},
 			}, nil
 		}

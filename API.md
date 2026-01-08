@@ -174,22 +174,30 @@ curl -X POST "http://localhost:8080/api/generate-dummy" \
 - **Time Range**: 2025-12-01 00:00:00 đến 2026-01-31 23:59:59
 - **Frequency**: 1 record mỗi phút cho mỗi tag
 - **Value Generation**:
-  - Base value: Random từ 1000-5000 cho mỗi tag
+  - Base value: Random trong range được cấu hình (default: 1.0-255.0) cho mỗi tag
+  - Value range có thể được cấu hình trong `config.json`:
+    ```json
+    {
+      "data": {
+        "value_range": {
+          "min": 1.0,
+          "max": 255.0
+        }
+      }
+    }
+    ```
   - Value thay đổi giữa 2 record liên tiếp: < 30% (random -30% đến +30%)
   - Value được đảm bảo không âm
 - **Quality**: Fixed value = 3
 
-**Duplicate Handling:**
+**Important Notes:**
 
-Tương tự như Load API, khi có duplicate records:
-- Nếu quality mới >= quality cũ: Cập nhật record
-- Nếu quality mới < quality cũ: Bỏ qua, giữ nguyên record cũ
-
-**Notes:**
+- **Data Replacement**: API này sẽ **xóa tất cả records hiện có** trong database trước khi generate batch mới. Điều này đảm bảo database chỉ chứa data mới nhất từ lần generate gần nhất.
 - Quá trình generate có thể mất nhiều thời gian do số lượng records lớn (~89,280 records/tag)
 - Data được commit theo batches (mỗi 10,000 records) để tránh memory issues
 - Progress được log mỗi 10 tags đã xử lý
 - Nếu một tag lỗi, toàn bộ quá trình sẽ dừng và trả về lỗi
+- **Warning**: Nếu bạn có data quan trọng trong database, hãy backup trước khi gọi API này
 
 **Performance Considerations:**
 

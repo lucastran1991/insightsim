@@ -11,13 +11,17 @@ import (
 type GeneratorHandler struct {
 	generator    *services.Generator
 	tagListFile  string
+	minValue     float64
+	maxValue     float64
 }
 
 // NewGeneratorHandler creates a new GeneratorHandler instance
-func NewGeneratorHandler(generator *services.Generator, tagListFile string) *GeneratorHandler {
+func NewGeneratorHandler(generator *services.Generator, tagListFile string, minValue, maxValue float64) *GeneratorHandler {
 	return &GeneratorHandler{
 		generator:   generator,
 		tagListFile: tagListFile,
+		minValue:    minValue,
+		maxValue:    maxValue,
 	}
 }
 
@@ -36,7 +40,7 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, tagsCount, err := h.generator.GenerateDummyData(h.tagListFile)
+	count, tagsCount, err := h.generator.GenerateDummyData(h.tagListFile, h.minValue, h.maxValue)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)

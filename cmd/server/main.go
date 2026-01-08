@@ -49,10 +49,18 @@ func main() {
 	queryService := services.NewQueryService(db)
 	generator := services.NewGenerator(db)
 
+	// Get value range from config (with defaults)
+	minValue := 1.0
+	maxValue := 255.0
+	if cfg.Data.ValueRange != nil {
+		minValue = cfg.Data.ValueRange.Min
+		maxValue = cfg.Data.ValueRange.Max
+	}
+
 	// Initialize handlers with config
 	loadHandler := handlers.NewLoadHandler(loader, cfg.Data.RawDataFolder)
 	queryHandler := handlers.NewQueryHandler(queryService)
-	generatorHandler := handlers.NewGeneratorHandler(generator, cfg.Data.TagListFile)
+	generatorHandler := handlers.NewGeneratorHandler(generator, cfg.Data.TagListFile, minValue, maxValue)
 
 	// Setup router
 	router := mux.NewRouter()

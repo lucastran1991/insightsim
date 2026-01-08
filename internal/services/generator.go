@@ -25,7 +25,7 @@ func NewGenerator(db *database.DB) *Generator {
 }
 
 // GenerateDummyData generates dummy data for all tags from tag_list.json
-func (g *Generator) GenerateDummyData(tagListFile string) (int, int, error) {
+func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue float64) (int, int, error) {
 	// Read tag_list.json from config
 	tagListPath := tagListFile
 	if !filepath.IsAbs(tagListPath) {
@@ -55,7 +55,12 @@ func (g *Generator) GenerateDummyData(tagListFile string) (int, int, error) {
 	// Calculate total minutes
 	totalMinutes := int(endTime.Sub(startTime).Minutes()) + 1
 
+	// Delete all existing records before generating new batch
 	conn := g.db.GetConn()
+	if err := g.db.DeleteAllRecords(); err != nil {
+		return 0, 0, fmt.Errorf("failed to delete existing records: %w", err)
+	}
+
 	tx, err := conn.Begin()
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to begin transaction: %w", err)
@@ -100,8 +105,8 @@ func (g *Generator) GenerateDummyData(tagListFile string) (int, int, error) {
 			continue
 		}
 
-		// Random base value between 1000-5000 for this tag
-		baseValue := 1000.0 + rand.Float64()*(5000.0-1000.0)
+		// Random base value within configured range for this tag
+		baseValue := minValue + rand.Float64()*(maxValue-minValue)
 		currentValue := baseValue
 
 		// Generate records for each minute
