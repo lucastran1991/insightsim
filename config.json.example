@@ -10,9 +10,11 @@
     "raw_data_folder": "raw_data",
     "tag_list_file": "raw_data/tag_list.json",
     "value_range": {
-      "min": 1.0,
+      "min": 1000.0,
       "max": 10000.0
     },
-    "use_sequential_generation": false
+    "use_sequential_generation": false,
+    "generation_start_time": "2025-12-01T00:00:00",
+    "generation_end_time": "2026-01-31T23:59:59"
   }
 }

@@ -30,6 +30,8 @@ type DataConfig struct {
 	TagListFile            string      `json:"tag_list_file"`
 	ValueRange             *ValueRange  `json:"value_range,omitempty"`
 	UseSequentialGeneration bool       `json:"use_sequential_generation"`
+	GenerationStartTime    string      `json:"generation_start_time"`
+	GenerationEndTime      string      `json:"generation_end_time"`
 }
 
 // ValueRange represents the range for random value generation
@@ -84,6 +86,13 @@ func LoadConfig(configPath string) (*Config, error) {
 	if config.Data.ValueRange.Min >= config.Data.ValueRange.Max {
 		return nil, fmt.Errorf("invalid value range: min (%f) must be less than max (%f)", config.Data.ValueRange.Min, config.Data.ValueRange.Max)
 	}
+	// Set default generation times if not specified
+	if config.Data.GenerationStartTime == "" {
+		config.Data.GenerationStartTime = "2025-12-01T00:00:00"
+	}
+	if config.Data.GenerationEndTime == "" {
+		config.Data.GenerationEndTime = "2026-01-31T23:59:59"
+	}
 
 	return &config, nil
 }
@@ -114,6 +123,8 @@ func LoadConfigWithDefaults(configPath string) (*Config, error) {
 						Max: 10000.0,
 					},
 					UseSequentialGeneration: false,
+					GenerationStartTime:     "2025-12-01T00:00:00",
+					GenerationEndTime:       "2026-01-31T23:59:59",
 				},
 			}, nil
 		}

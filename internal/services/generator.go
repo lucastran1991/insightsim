@@ -25,7 +25,7 @@ func NewGenerator(db *database.DB) *Generator {
 }
 
 // GenerateDummyData generates dummy data for all tags from tag_list.json
-func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue float64, useSequential bool) (int, int, error) {
+func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue float64, useSequential bool, startTimeStr, endTimeStr string) (int, int, error) {
 	generateStartTime := time.Now()
 
 	// Read tag_list.json from config
@@ -58,9 +58,33 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 
 	fmt.Printf("[GENERATE] Parsed %d tags from tag list\n", len(tags))
 
-	// Time range: 2025-12-01 00:00:00 to 2026-01-31 23:59:59
-	startTime := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
-	endTime := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
+	// Parse time range from config
+	timeFormat := "2006-01-02T15:04:05"
+	
+	// Set defaults if empty
+	if startTimeStr == "" {
+		startTimeStr = "2025-12-01T00:00:00"
+	}
+	if endTimeStr == "" {
+		endTimeStr = "2026-01-31T23:59:59"
+	}
+	
+	startTime, err := time.Parse(timeFormat, startTimeStr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid generation_start_time format '%s': %w (expected format: %s)", startTimeStr, err, timeFormat)
+	}
+	startTime = startTime.UTC()
+	
+	endTime, err := time.Parse(timeFormat, endTimeStr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid generation_end_time format '%s': %w (expected format: %s)", endTimeStr, err, timeFormat)
+	}
+	endTime = endTime.UTC()
+	
+	// Validate that start time is before end time
+	if startTime.After(endTime) || startTime.Equal(endTime) {
+		return 0, 0, fmt.Errorf("invalid time range: generation_start_time (%s) must be before generation_end_time (%s)", startTimeStr, endTimeStr)
+	}
 
 	// Calculate total minutes
 	totalMinutes := int(endTime.Sub(startTime).Minutes()) + 1

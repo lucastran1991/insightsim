@@ -60,10 +60,20 @@ func main() {
 	// Get sequential generation flag from config (default: false)
 	useSequential := cfg.Data.UseSequentialGeneration
 
+	// Get generation time range from config (with defaults)
+	startTime := cfg.Data.GenerationStartTime
+	endTime := cfg.Data.GenerationEndTime
+	if startTime == "" {
+		startTime = "2025-12-01T00:00:00"
+	}
+	if endTime == "" {
+		endTime = "2026-01-31T23:59:59"
+	}
+
 	// Initialize handlers with config
 	loadHandler := handlers.NewLoadHandler(loader, cfg.Data.RawDataFolder)
 	queryHandler := handlers.NewQueryHandler(queryService)
-	generatorHandler := handlers.NewGeneratorHandler(generator, cfg.Data.TagListFile, minValue, maxValue, useSequential)
+	generatorHandler := handlers.NewGeneratorHandler(generator, cfg.Data.TagListFile, minValue, maxValue, useSequential, startTime, endTime)
 
 	// Setup router
 	router := mux.NewRouter()
