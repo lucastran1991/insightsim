@@ -57,10 +57,13 @@ func main() {
 		maxValue = cfg.Data.ValueRange.Max
 	}
 
+	// Get sequential generation flag from config (default: false)
+	useSequential := cfg.Data.UseSequentialGeneration
+
 	// Initialize handlers with config
 	loadHandler := handlers.NewLoadHandler(loader, cfg.Data.RawDataFolder)
 	queryHandler := handlers.NewQueryHandler(queryService)
-	generatorHandler := handlers.NewGeneratorHandler(generator, cfg.Data.TagListFile, minValue, maxValue)
+	generatorHandler := handlers.NewGeneratorHandler(generator, cfg.Data.TagListFile, minValue, maxValue, useSequential)
 
 	// Setup router
 	router := mux.NewRouter()

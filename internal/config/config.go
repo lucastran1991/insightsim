@@ -26,9 +26,10 @@ type DatabaseConfig struct {
 
 // DataConfig represents data configuration
 type DataConfig struct {
-	RawDataFolder string      `json:"raw_data_folder"`
-	TagListFile   string      `json:"tag_list_file"`
-	ValueRange    *ValueRange `json:"value_range,omitempty"`
+	RawDataFolder          string      `json:"raw_data_folder"`
+	TagListFile            string      `json:"tag_list_file"`
+	ValueRange             *ValueRange  `json:"value_range,omitempty"`
+	UseSequentialGeneration bool       `json:"use_sequential_generation"`
 }
 
 // ValueRange represents the range for random value generation
@@ -106,12 +107,13 @@ func LoadConfigWithDefaults(configPath string) (*Config, error) {
 					Path: "insightsim.db",
 				},
 				Data: DataConfig{
-					RawDataFolder: "raw_data",
-					TagListFile:   "raw_data/tag_list.json",
+					RawDataFolder:          "raw_data",
+					TagListFile:            "raw_data/tag_list.json",
 					ValueRange: &ValueRange{
 						Min: 1.0,
 						Max: 10000.0,
 					},
+					UseSequentialGeneration: false,
 				},
 			}, nil
 		}

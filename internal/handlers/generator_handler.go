@@ -10,19 +10,21 @@ import (
 
 // GeneratorHandler handles POST /api/generate-dummy requests
 type GeneratorHandler struct {
-	generator    *services.Generator
-	tagListFile  string
-	minValue     float64
-	maxValue     float64
+	generator       *services.Generator
+	tagListFile     string
+	minValue        float64
+	maxValue        float64
+	useSequential   bool
 }
 
 // NewGeneratorHandler creates a new GeneratorHandler instance
-func NewGeneratorHandler(generator *services.Generator, tagListFile string, minValue, maxValue float64) *GeneratorHandler {
+func NewGeneratorHandler(generator *services.Generator, tagListFile string, minValue, maxValue float64, useSequential bool) *GeneratorHandler {
 	return &GeneratorHandler{
-		generator:   generator,
-		tagListFile: tagListFile,
-		minValue:    minValue,
-		maxValue:    maxValue,
+		generator:     generator,
+		tagListFile:   tagListFile,
+		minValue:      minValue,
+		maxValue:      maxValue,
+		useSequential: useSequential,
 	}
 }
 
@@ -41,9 +43,13 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("[API] POST /api/generate-dummy - Starting generation (value range: %.2f-%.2f)\n", h.minValue, h.maxValue)
+	mode := "random"
+	if h.useSequential {
+		mode = "sequential (30% restriction)"
+	}
+	fmt.Printf("[API] POST /api/generate-dummy - Starting generation (value range: %.2f-%.2f, mode: %s)\n", h.minValue, h.maxValue, mode)
 	
-	count, tagsCount, err := h.generator.GenerateDummyData(h.tagListFile, h.minValue, h.maxValue)
+	count, tagsCount, err := h.generator.GenerateDummyData(h.tagListFile, h.minValue, h.maxValue, h.useSequential)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)

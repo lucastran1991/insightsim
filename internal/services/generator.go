@@ -25,7 +25,7 @@ func NewGenerator(db *database.DB) *Generator {
 }
 
 // GenerateDummyData generates dummy data for all tags from tag_list.json
-func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue float64) (int, int, error) {
+func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue float64, useSequential bool) (int, int, error) {
 	generateStartTime := time.Now()
 
 	// Read tag_list.json from config
@@ -124,21 +124,33 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 
 		tagStartTime := time.Now()
 		tagRecords := 0
-		// Random base value within configured range for this tag
-		baseValue := minValue + rand.Float64()*(maxValue-minValue)
-		currentValue := baseValue
+
+		// Initialize base value and current value for sequential generation
+		var baseValue float64
+		var currentValue float64
+		if useSequential {
+			// Random base value within configured range for this tag
+			baseValue = minValue + rand.Float64()*(maxValue-minValue)
+			currentValue = baseValue
+		}
 
 		// Generate records for each minute
 		for minute := 0; minute < totalMinutes; minute++ {
 			currentTime := startTime.Add(time.Duration(minute) * time.Minute)
 			timestamp := currentTime.UnixMilli()
 
-			// Generate new value with change < 30%
-			// Change can be between -30% and +30%
-			changePercent := (rand.Float64()*2 - 1) * 0.3 // -0.3 to 0.3
-			newValue := currentValue * (1 + changePercent)
+			// Generate value based on generation mode
+			var newValue float64
+			if useSequential {
+				// Sequential generation: change from previous value with 30% restriction
+				changePercent := (rand.Float64()*2 - 1) * 0.3 // -0.3 to 0.3
+				newValue = currentValue * (1 + changePercent)
+			} else {
+				// Completely random value within configured range [minValue, maxValue]
+				newValue = minValue + rand.Float64()*(maxValue-minValue)
+			}
 
-			// Clamp value to configured range [minValue, maxValue]
+			// Clamp value to configured range [minValue, maxValue] (safety check)
 			wasClamped := false
 			originalValue := newValue
 			if newValue < minValue {
@@ -165,7 +177,7 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 					}
 					totalRecords++
 					tagRecords++
-					
+
 					// Log every record generated
 					clampInfo := ""
 					if wasClamped {
@@ -186,7 +198,7 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 					}
 					totalRecords++
 					tagRecords++
-					
+
 					// Log every record generated
 					clampInfo := ""
 					if wasClamped {
@@ -201,8 +213,10 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 				}
 			}
 
-			// Update current value for next iteration
-			currentValue = newValue
+			// Update current value for next iteration (only for sequential mode)
+			if useSequential {
+				currentValue = newValue
+			}
 
 			// Commit in batches to avoid memory issues
 			if totalRecords%10000 == 0 {
