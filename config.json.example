@@ -11,7 +11,7 @@
     "tag_list_file": "raw_data/tag_list.json",
     "value_range": {
       "min": 1.0,
-      "max": 255.0
+      "max": 10000.0
     }
   }
 }

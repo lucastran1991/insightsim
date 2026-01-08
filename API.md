@@ -174,14 +174,14 @@ curl -X POST "http://localhost:8080/api/generate-dummy" \
 - **Time Range**: 2025-12-01 00:00:00 đến 2026-01-31 23:59:59
 - **Frequency**: 1 record mỗi phút cho mỗi tag
 - **Value Generation**:
-  - Base value: Random trong range được cấu hình (default: 1.0-255.0) cho mỗi tag
+  - Base value: Random trong range được cấu hình (default: 1.0-10000.0) cho mỗi tag
   - Value range có thể được cấu hình trong `config.json`:
     ```json
     {
       "data": {
         "value_range": {
           "min": 1.0,
-          "max": 255.0
+          "max": 10000.0
         }
       }
     }

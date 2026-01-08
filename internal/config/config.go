@@ -76,7 +76,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	if config.Data.ValueRange == nil {
 		config.Data.ValueRange = &ValueRange{
 			Min: 1.0,
-			Max: 255.0,
+			Max: 10000.0,
 		}
 	}
 	// Validate value range
@@ -110,7 +110,7 @@ func LoadConfigWithDefaults(configPath string) (*Config, error) {
 					TagListFile:   "raw_data/tag_list.json",
 					ValueRange: &ValueRange{
 						Min: 1.0,
-						Max: 255.0,
+						Max: 10000.0,
 					},
 				},
 			}, nil

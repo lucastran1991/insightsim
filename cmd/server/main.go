@@ -51,7 +51,7 @@ func main() {
 
 	// Get value range from config (with defaults)
 	minValue := 1.0
-	maxValue := 255.0
+	maxValue := 10000.0
 	if cfg.Data.ValueRange != nil {
 		minValue = cfg.Data.ValueRange.Min
 		maxValue = cfg.Data.ValueRange.Max

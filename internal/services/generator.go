@@ -138,9 +138,12 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 			changePercent := (rand.Float64()*2 - 1) * 0.3 // -0.3 to 0.3
 			newValue := currentValue * (1 + changePercent)
 
-			// Ensure value stays within reasonable bounds
-			if newValue < 0 {
-				newValue = 0
+			// Clamp value to configured range [minValue, maxValue]
+			if newValue < minValue {
+				newValue = minValue
+			}
+			if newValue > maxValue {
+				newValue = maxValue
 			}
 
 			quality := 3 // Fixed quality value
