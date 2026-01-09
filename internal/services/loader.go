@@ -188,6 +188,10 @@ func parseTimestamp(isoTime string) (int64, error) {
 		"2006-01-02T15:04:05.000Z",
 		time.RFC3339,
 		time.RFC3339Nano,
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04:05Z",
+		"2006-01-02 15:04:05.000",
+		"2006-01-02 15:04:05.000Z",
 	}
 
 	for _, format := range formats {
