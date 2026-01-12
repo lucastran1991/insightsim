@@ -289,6 +289,55 @@ else
     echo "WARNING: Install Node.js to enable frontend: curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - && sudo apt-get install -y nodejs"
 fi
 
+# Stop existing services if they exist (before reloading systemd)
+echo "Stopping existing services if they exist..."
+if sudo systemctl is-active --quiet "$BACKEND_SERVICE_NAME" 2>/dev/null; then
+    echo "Stopping existing backend service..."
+    sudo systemctl stop "$BACKEND_SERVICE_NAME" 2>/dev/null || true
+    sleep 1
+fi
+
+if sudo systemctl is-active --quiet "$FRONTEND_SERVICE_NAME" 2>/dev/null; then
+    echo "Stopping existing frontend service..."
+    sudo systemctl stop "$FRONTEND_SERVICE_NAME" 2>/dev/null || true
+    sleep 1
+fi
+
+# Also kill any processes that might be running on the ports
+echo "Checking for processes on ports..."
+if command -v lsof &> /dev/null; then
+    # Kill backend port
+    BACKEND_PID=$(sudo lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null || true)
+    if [ -n "$BACKEND_PID" ]; then
+        echo "Killing process $BACKEND_PID on backend port $PORT..."
+        sudo kill -9 "$BACKEND_PID" 2>/dev/null || true
+        sleep 1
+    fi
+    
+    # Kill frontend port
+    FRONTEND_PID=$(sudo lsof -Pi :$FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null || true)
+    if [ -n "$FRONTEND_PID" ]; then
+        echo "Killing process $FRONTEND_PID on frontend port $FRONTEND_PORT..."
+        sudo kill -9 "$FRONTEND_PID" 2>/dev/null || true
+        sleep 1
+    fi
+elif command -v netstat &> /dev/null; then
+    # Fallback for systems without lsof
+    BACKEND_PID=$(sudo netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1 || true)
+    if [ -n "$BACKEND_PID" ] && [ "$BACKEND_PID" != "-" ]; then
+        echo "Killing process $BACKEND_PID on backend port $PORT..."
+        sudo kill -9 "$BACKEND_PID" 2>/dev/null || true
+        sleep 1
+    fi
+    
+    FRONTEND_PID=$(sudo netstat -tlnp 2>/dev/null | grep ":$FRONTEND_PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1 || true)
+    if [ -n "$FRONTEND_PID" ] && [ "$FRONTEND_PID" != "-" ]; then
+        echo "Killing process $FRONTEND_PID on frontend port $FRONTEND_PORT..."
+        sudo kill -9 "$FRONTEND_PID" 2>/dev/null || true
+        sleep 1
+    fi
+fi
+
 # Reload systemd
 sudo systemctl daemon-reload
 

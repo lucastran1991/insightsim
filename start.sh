@@ -273,40 +273,7 @@ else
     log_info "Skipping build (using existing binary)"
 fi
 
-# Check if port is already in use and kill the process
-log_step "Checking if port $PORT is available..."
-if command -v lsof &> /dev/null; then
-    PID=$(lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null)
-    if [ -n "$PID" ]; then
-        log_warn "Port $PORT is already in use by process $PID"
-        log_info "Killing process $PID to free up port $PORT..."
-        kill -9 "$PID" 2>/dev/null || true
-        sleep 1
-        
-        # Verify port is now free
-        if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
-            log_error "Failed to kill process on port $PORT"
-            log_info "You can manually kill it: kill -9 $PID"
-            exit 1
-        else
-            log_info "Port $PORT is now available"
-        fi
-    else
-        log_info "Port $PORT is available"
-    fi
-elif command -v netstat &> /dev/null; then
-    # Fallback for systems without lsof (some Linux distros)
-    PID=$(netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1)
-    if [ -n "$PID" ] && [ "$PID" != "-" ]; then
-        log_warn "Port $PORT is already in use by process $PID"
-        log_info "Killing process $PID to free up port $PORT..."
-        kill -9 "$PID" 2>/dev/null || true
-        sleep 1
-        log_info "Port $PORT should now be available"
-    else
-        log_info "Port $PORT is available"
-    fi
-fi
+# Note: Port checking and process killing is now done later, after PM2 process cleanup
 
 # Create database directory if needed
 DB_DIR=$(dirname "$DB_PATH")
@@ -341,22 +308,80 @@ fi
 BINARY_ABS=$(cd "$(dirname "$BINARY")" && pwd)/$(basename "$BINARY")
 WORK_DIR=$(pwd)
 
-# Check if PM2 processes already exist
+# Check if PM2 processes already exist and kill them
 BACKEND_PM2_NAME="${APP_NAME}-backend"
 FRONTEND_PM2_NAME="${APP_NAME}-frontend"
 
+log_step "Checking for existing processes..."
+
+# Kill backend PM2 process if exists
 if pm2 describe "$BACKEND_PM2_NAME" > /dev/null 2>&1; then
     log_warn "PM2 process '$BACKEND_PM2_NAME' already exists"
-    log_info "Stopping existing process..."
+    log_info "Stopping and deleting existing backend process..."
     pm2 stop "$BACKEND_PM2_NAME" 2>/dev/null || true
     pm2 delete "$BACKEND_PM2_NAME" 2>/dev/null || true
+    sleep 1
 fi
 
+# Kill frontend PM2 process if exists
 if pm2 describe "$FRONTEND_PM2_NAME" > /dev/null 2>&1; then
     log_warn "PM2 process '$FRONTEND_PM2_NAME' already exists"
-    log_info "Stopping existing process..."
+    log_info "Stopping and deleting existing frontend process..."
     pm2 stop "$FRONTEND_PM2_NAME" 2>/dev/null || true
     pm2 delete "$FRONTEND_PM2_NAME" 2>/dev/null || true
+    sleep 1
+fi
+
+# Also check for processes running on the backend port and kill them
+if command -v lsof &> /dev/null; then
+    BACKEND_PID=$(lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null)
+    if [ -n "$BACKEND_PID" ]; then
+        log_warn "Found process $BACKEND_PID running on backend port $PORT"
+        log_info "Killing process $BACKEND_PID..."
+        kill -9 "$BACKEND_PID" 2>/dev/null || true
+        sleep 1
+    fi
+elif command -v netstat &> /dev/null; then
+    BACKEND_PID=$(netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1)
+    if [ -n "$BACKEND_PID" ] && [ "$BACKEND_PID" != "-" ]; then
+        log_warn "Found process $BACKEND_PID running on backend port $PORT"
+        log_info "Killing process $BACKEND_PID..."
+        kill -9 "$BACKEND_PID" 2>/dev/null || true
+        sleep 1
+    fi
+fi
+
+# Check for frontend process on port 3000 (default Next.js port)
+FRONTEND_PORT=3000
+if command -v lsof &> /dev/null; then
+    FRONTEND_PID=$(lsof -Pi :$FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null)
+    if [ -n "$FRONTEND_PID" ]; then
+        log_warn "Found process $FRONTEND_PID running on frontend port $FRONTEND_PORT"
+        log_info "Killing process $FRONTEND_PID..."
+        kill -9 "$FRONTEND_PID" 2>/dev/null || true
+        sleep 1
+    fi
+elif command -v netstat &> /dev/null; then
+    FRONTEND_PID=$(netstat -tlnp 2>/dev/null | grep ":$FRONTEND_PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1)
+    if [ -n "$FRONTEND_PID" ] && [ "$FRONTEND_PID" != "-" ]; then
+        log_warn "Found process $FRONTEND_PID running on frontend port $FRONTEND_PORT"
+        log_info "Killing process $FRONTEND_PID..."
+        kill -9 "$FRONTEND_PID" 2>/dev/null || true
+        sleep 1
+    fi
+fi
+
+log_info "Process cleanup completed"
+
+# Verify ports are now free
+log_step "Verifying ports are available..."
+if command -v lsof &> /dev/null; then
+    if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+        log_error "Port $PORT is still in use after cleanup"
+        exit 1
+    else
+        log_info "Backend port $PORT is available"
+    fi
 fi
 
 # Start backend with PM2
