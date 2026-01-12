@@ -1,0 +1,85 @@
+# Node.js dependencies - ignore to save tokens
+node_modules/
+**/node_modules/
+
+# Frontend build outputs
+.next/
+out/
+.vercel/
+dist/
+build/
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Logs
+*.log
+logs/
+out.log
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+data/
+*.db-journal
+
+# Binary files
+*.exe
+*.dll
+*.so
+*.dylib
+/server
+/insightsim
+/insightsim.exe
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Go build artifacts
+*.test
+*.out
+vendor/
+
+# Large data files
+raw_data/*.json
+!raw_data/tag_list.json
+
+# Git files
+.git/
+
+# PM2 files
+.pm2/
+
+# Coverage reports
+coverage/
+*.coverprofile
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Cache directories
+.cache/
+.parcel-cache/
+.eslintcache

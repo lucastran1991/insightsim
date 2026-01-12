@@ -60,7 +60,7 @@ usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Start Insightsim backend server.
+Start Insightsim backend and frontend servers.
 
 Options:
     -c, --config FILE        Config file path (default: config.json)
@@ -68,9 +68,9 @@ Options:
     -d, --db PATH            Database file path (overrides config)
     -b, --no-build           Skip building the application
     -r, --run-only           Run without building (use existing binary)
-    -s, --stop               Stop the PM2 process
-    -R, --restart            Restart the PM2 process
-    -l, --logs               Show PM2 logs
+    -s, --stop               Stop all PM2 processes (backend and frontend)
+    -R, --restart            Restart all PM2 processes
+    -l, --logs               Show combined PM2 logs (from out.log)
     -h, --help               Show this help message
 
 Environment Variables:
@@ -80,12 +80,12 @@ Environment Variables:
     BUILD_ON_START           Build before start (default: true)
 
 Examples:
-    $0                       # Start server with PM2
-    $0 -p 3000                # Start on port 3000
-    $0 --no-build             # Start without building
-    $0 --stop                 # Stop PM2 process
-    $0 --restart              # Restart PM2 process
-    $0 --logs                 # View logs
+    $0                       # Start backend and frontend with PM2
+    $0 -p 3000                # Start backend on port 3000
+    $0 --no-build             # Start without building backend
+    $0 --stop                 # Stop all PM2 processes
+    $0 --restart              # Restart all PM2 processes
+    $0 --logs                 # View combined logs from out.log
     PORT=3000 DB_PATH=dev.db $0
 
 EOF
@@ -154,36 +154,76 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Handle actions
+BACKEND_PM2_NAME="${APP_NAME}-backend"
+FRONTEND_PM2_NAME="${APP_NAME}-frontend"
+
 if [ "$ACTION" = "stop" ]; then
-    if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
-        log_info "Stopping $APP_NAME..."
-        pm2 stop "$APP_NAME"
-        pm2 delete "$APP_NAME"
-        log_info "Stopped successfully"
+    STOPPED_ANY=false
+    if pm2 describe "$BACKEND_PM2_NAME" > /dev/null 2>&1; then
+        log_info "Stopping backend ($BACKEND_PM2_NAME)..."
+        pm2 stop "$BACKEND_PM2_NAME"
+        pm2 delete "$BACKEND_PM2_NAME"
+        log_info "Backend stopped successfully"
+        STOPPED_ANY=true
     else
-        log_warn "Process $APP_NAME not found in PM2"
+        log_warn "Backend process $BACKEND_PM2_NAME not found in PM2"
+    fi
+    
+    if pm2 describe "$FRONTEND_PM2_NAME" > /dev/null 2>&1; then
+        log_info "Stopping frontend ($FRONTEND_PM2_NAME)..."
+        pm2 stop "$FRONTEND_PM2_NAME"
+        pm2 delete "$FRONTEND_PM2_NAME"
+        log_info "Frontend stopped successfully"
+        STOPPED_ANY=true
+    else
+        log_warn "Frontend process $FRONTEND_PM2_NAME not found in PM2"
+    fi
+    
+    if [ "$STOPPED_ANY" = false ]; then
+        log_warn "No processes found to stop"
     fi
     exit 0
 fi
 
 if [ "$ACTION" = "restart" ]; then
-    if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
-        log_info "Restarting $APP_NAME..."
-        pm2 restart "$APP_NAME"
-        log_info "Restarted successfully"
-        pm2 status "$APP_NAME"
+    RESTARTED_ANY=false
+    if pm2 describe "$BACKEND_PM2_NAME" > /dev/null 2>&1; then
+        log_info "Restarting backend ($BACKEND_PM2_NAME)..."
+        pm2 restart "$BACKEND_PM2_NAME"
+        log_info "Backend restarted successfully"
+        RESTARTED_ANY=true
     else
-        log_error "Process $APP_NAME not found in PM2. Use './start.sh' to start it first."
+        log_error "Backend process $BACKEND_PM2_NAME not found in PM2. Use './start.sh' to start it first."
+    fi
+    
+    if pm2 describe "$FRONTEND_PM2_NAME" > /dev/null 2>&1; then
+        log_info "Restarting frontend ($FRONTEND_PM2_NAME)..."
+        pm2 restart "$FRONTEND_PM2_NAME"
+        log_info "Frontend restarted successfully"
+        RESTARTED_ANY=true
+    else
+        log_warn "Frontend process $FRONTEND_PM2_NAME not found in PM2"
+    fi
+    
+    if [ "$RESTARTED_ANY" = true ]; then
+        pm2 status
+        exit 0
+    else
         exit 1
     fi
-    exit 0
 fi
 
 if [ "$ACTION" = "logs" ]; then
-    if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
-        pm2 logs "$APP_NAME"
+    HAS_PROCESSES=false
+    if pm2 describe "$BACKEND_PM2_NAME" > /dev/null 2>&1 || pm2 describe "$FRONTEND_PM2_NAME" > /dev/null 2>&1; then
+        HAS_PROCESSES=true
+    fi
+    
+    if [ "$HAS_PROCESSES" = true ]; then
+        log_info "Showing logs from all processes (combined in out.log):"
+        pm2 logs --lines 50
     else
-        log_warn "Process $APP_NAME not found in PM2"
+        log_warn "No processes found in PM2"
         if [ -f "out.log" ]; then
             log_info "Showing out.log file:"
             tail -f out.log
@@ -219,7 +259,7 @@ fi
 # Build application
 if [ "$SKIP_BUILD" = false ]; then
     log_step "Building application..."
-    if go build -o "$BINARY_NAME" ./cmd/server; then
+    if (cd backend && go build -o "../$BINARY_NAME" ./cmd/server); then
         log_info "Build successful: $BINARY_NAME"
     else
         log_error "Build failed"
@@ -227,7 +267,7 @@ if [ "$SKIP_BUILD" = false ]; then
     fi
 elif [ "$BINARY_EXISTS" = false ]; then
     log_error "Binary not found. Please build first or remove --no-build flag."
-    log_info "Run: go build -o $BINARY_NAME ./cmd/server"
+    log_info "Run: cd backend && go build -o ../$BINARY_NAME ./cmd/server"
     exit 1
 else
     log_info "Skipping build (using existing binary)"
@@ -280,8 +320,8 @@ if [ ! -d "raw_data" ]; then
     log_warn "raw_data directory not found. Some APIs may not work."
 fi
 
-# Start server
-log_step "Starting server with PM2..."
+# Start backend server
+log_step "Starting backend server with PM2..."
 log_info "Database: $DB_PATH"
 log_info "Port: $PORT"
 log_info "Config: $CONFIG_FILE"
@@ -301,18 +341,28 @@ fi
 BINARY_ABS=$(cd "$(dirname "$BINARY")" && pwd)/$(basename "$BINARY")
 WORK_DIR=$(pwd)
 
-# Check if PM2 process already exists
-if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
-    log_warn "PM2 process '$APP_NAME' already exists"
+# Check if PM2 processes already exist
+BACKEND_PM2_NAME="${APP_NAME}-backend"
+FRONTEND_PM2_NAME="${APP_NAME}-frontend"
+
+if pm2 describe "$BACKEND_PM2_NAME" > /dev/null 2>&1; then
+    log_warn "PM2 process '$BACKEND_PM2_NAME' already exists"
     log_info "Stopping existing process..."
-    pm2 stop "$APP_NAME" 2>/dev/null || true
-    pm2 delete "$APP_NAME" 2>/dev/null || true
+    pm2 stop "$BACKEND_PM2_NAME" 2>/dev/null || true
+    pm2 delete "$BACKEND_PM2_NAME" 2>/dev/null || true
 fi
 
-# Start with PM2
-log_info "Starting $APP_NAME with PM2..."
+if pm2 describe "$FRONTEND_PM2_NAME" > /dev/null 2>&1; then
+    log_warn "PM2 process '$FRONTEND_PM2_NAME' already exists"
+    log_info "Stopping existing process..."
+    pm2 stop "$FRONTEND_PM2_NAME" 2>/dev/null || true
+    pm2 delete "$FRONTEND_PM2_NAME" 2>/dev/null || true
+fi
+
+# Start backend with PM2
+log_info "Starting backend ($BACKEND_PM2_NAME) with PM2..."
 pm2 start "$BINARY_ABS" \
-    --name "$APP_NAME" \
+    --name "$BACKEND_PM2_NAME" \
     --cwd "$WORK_DIR" \
     --log "$WORK_DIR/out.log" \
     --error "$WORK_DIR/out.log" \
@@ -324,40 +374,113 @@ pm2 start "$BINARY_ABS" \
     -db "$DB_PATH" \
     -port "$PORT"
 
+# Wait a bit for backend to start
+sleep 2
+
+# Check if Node.js and npm are available for frontend
+log_step "Checking frontend prerequisites..."
+if ! command -v node &> /dev/null; then
+    log_warn "Node.js is not installed. Frontend will not be started."
+    log_warn "Install Node.js to enable frontend: https://nodejs.org/"
+    FRONTEND_AVAILABLE=false
+else
+    log_info "Node.js version: $(node --version)"
+    if ! command -v npm &> /dev/null; then
+        log_warn "npm is not installed. Frontend will not be started."
+        FRONTEND_AVAILABLE=false
+    else
+        log_info "npm version: $(npm --version)"
+        FRONTEND_AVAILABLE=true
+    fi
+fi
+
+# Start frontend if available
+if [ "$FRONTEND_AVAILABLE" = true ] && [ -d "frontend" ]; then
+    log_step "Starting frontend with PM2..."
+    
+    # Check if frontend dependencies are installed
+    if [ ! -d "frontend/node_modules" ]; then
+        log_info "Installing frontend dependencies..."
+        (cd frontend && npm install)
+    fi
+    
+    FRONTEND_DIR="$WORK_DIR/frontend"
+    
+    # Start frontend with PM2
+    log_info "Starting frontend ($FRONTEND_PM2_NAME) with PM2..."
+    pm2 start npm \
+        --name "$FRONTEND_PM2_NAME" \
+        --cwd "$FRONTEND_DIR" \
+        --log "$WORK_DIR/out.log" \
+        --error "$WORK_DIR/out.log" \
+        --output "$WORK_DIR/out.log" \
+        --merge-logs \
+        --time \
+        -- run dev
+    
+    log_info "Frontend started successfully!"
+else
+    if [ "$FRONTEND_AVAILABLE" = false ]; then
+        log_warn "Skipping frontend start (Node.js/npm not available)"
+    elif [ ! -d "frontend" ]; then
+        log_warn "Frontend directory not found, skipping frontend start"
+    fi
+fi
+
 # Configure PM2 to write output to out.log and save
 pm2 save --force > /dev/null 2>&1 || true
 
 log_info ""
-log_info "Server started with PM2!"
+log_info "Services started with PM2!"
 log_info ""
 log_info "Useful commands:"
-log_info "  View logs: pm2 logs $APP_NAME"
+log_info "  View logs: pm2 logs (shows all processes)"
 log_info "  View logs (file): tail -f out.log"
 log_info "  Status: pm2 status"
-log_info "  Stop: pm2 stop $APP_NAME or ./start.sh --stop"
-log_info "  Restart: pm2 restart $APP_NAME or ./start.sh --restart"
-log_info "  Delete: pm2 delete $APP_NAME"
+log_info "  Stop backend: pm2 stop $BACKEND_PM2_NAME or ./start.sh --stop"
+log_info "  Restart backend: pm2 restart $BACKEND_PM2_NAME or ./start.sh --restart"
+if [ "$FRONTEND_AVAILABLE" = true ] && [ -d "frontend" ]; then
+    log_info "  Stop frontend: pm2 stop $FRONTEND_PM2_NAME"
+    log_info "  Restart frontend: pm2 restart $FRONTEND_PM2_NAME"
+fi
+log_info "  Delete all: pm2 delete all"
 log_info ""
-log_info "Output will be written to: out.log"
+log_info "All logs are combined in: out.log"
 log_info ""
 
 # Show initial status
 sleep 2
-pm2 status "$APP_NAME"
+pm2 status
 
-# Verify process is running
-if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
+# Verify processes are running
+BACKEND_RUNNING=false
+FRONTEND_RUNNING=false
+
+if pm2 describe "$BACKEND_PM2_NAME" > /dev/null 2>&1; then
+    BACKEND_RUNNING=true
+fi
+
+if pm2 describe "$FRONTEND_PM2_NAME" > /dev/null 2>&1; then
+    FRONTEND_RUNNING=true
+fi
+
+log_info ""
+if [ "$BACKEND_RUNNING" = true ]; then
+    log_info "✓ Backend started successfully and is running in background"
+fi
+if [ "$FRONTEND_RUNNING" = true ]; then
+    log_info "✓ Frontend started successfully and is running in background"
+fi
+if [ "$BACKEND_RUNNING" = true ] || [ "$FRONTEND_RUNNING" = true ]; then
+    log_info "✓ Processes will continue running even if this script exits"
+    log_info "✓ PM2 will automatically restart processes if they crash"
     log_info ""
-    log_info "✓ Process started successfully and is running in background"
-    log_info "✓ Process will continue running even if this script exits"
-    log_info "✓ PM2 will automatically restart the process if it crashes"
-    log_info ""
-    log_info "Process is alive and running. You can safely close this terminal."
+    log_info "Processes are alive and running. You can safely close this terminal."
     log_info ""
     
-    # Exit successfully - process will continue running in PM2
+    # Exit successfully - processes will continue running in PM2
     exit 0
 else
-    log_error "Failed to start process with PM2"
+    log_error "Failed to start processes with PM2"
     exit 1
 fi

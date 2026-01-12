@@ -25,13 +25,13 @@ go mod download
 ### 3. Build Application
 
 ```bash
-go build -o server ./cmd/server
+cd backend && go build -o ../server ./cmd/server
 ```
 
 Hoặc build với tên khác:
 
 ```bash
-go build -o insightsim ./cmd/server
+cd backend && go build -o ../insightsim ./cmd/server
 ```
 
 ### 4. Run Server
@@ -65,7 +65,7 @@ Script sẽ tự động:
 **Cách 3: Sử dụng Go run (development)**
 
 ```bash
-go run ./cmd/server/main.go
+cd backend && go run ./cmd/server/main.go
 ```
 
 **Cách 4: Với custom options**
@@ -157,17 +157,18 @@ CompileDaemon -command="./server"
 
 ```
 insightsim/
-├── cmd/
-│   └── server/
-│       └── main.go              # Application entry point
-├── internal/
-│   ├── models/                  # Data models
-│   ├── database/                # Database layer
-│   ├── handlers/                # HTTP handlers
-│   └── services/                # Business logic
+├── backend/                     # Go backend code
+│   ├── cmd/
+│   │   └── server/
+│   │       └── main.go          # Application entry point
+│   ├── internal/
+│   │   ├── models/              # Data models
+│   │   ├── database/            # Database layer
+│   │   ├── handlers/            # HTTP handlers
+│   │   └── services/           # Business logic
+│   ├── go.mod                   # Go dependencies
+│   └── go.sum                   # Go dependencies checksum
 ├── raw_data/                    # Raw data files
-├── go.mod                       # Go dependencies
-├── go.sum                       # Go dependencies checksum
 ├── deploy.sh                    # Deployment script
 ├── API.md                       # API documentation
 ├── DEPLOYMENT.md                # Deployment guide
@@ -264,7 +265,7 @@ kill -9 <PID>
 # Clean and rebuild
 go clean
 go mod tidy
-go build -o server ./cmd/server
+cd backend && go build -o ../server ./cmd/server
 ```
 
 ### Missing Dependencies

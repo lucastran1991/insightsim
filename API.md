@@ -120,18 +120,37 @@ Khi có duplicate records (cùng tag và timestamp):
 
 ### Generate Dummy Data
 
-Generate dummy timeseries data cho tất cả tags từ file `raw_data/tag_list.json`.
+Generate dummy timeseries data cho tags từ file `raw_data/tag_list.json`. Có thể generate cho tất cả tags hoặc chỉ một tag cụ thể.
 
 **Endpoint:** `POST /api/generate-dummy`
 
 **Request:**
 
-API này không cần parameters. Nó sẽ tự động đọc tags từ `raw_data/tag_list.json` và generate data.
+Request body là optional. Nếu không có body hoặc body rỗng, API sẽ generate cho tất cả tags. Nếu có `tag` trong body, chỉ generate cho tag đó.
 
-**Request Example:**
+**Request Body (Optional):**
+```json
+{
+  "tag": "TAG_NAME"
+}
+```
+
+- Nếu không có `tag` trong request body: Generate cho tất cả tags từ `tag_list.json`
+- Nếu có `tag`: Chỉ generate cho tag đó (tag phải tồn tại trong `tag_list.json`)
+
+**Request Examples:**
+
+Generate cho tất cả tags:
 ```bash
 curl -X POST "http://localhost:8080/api/generate-dummy" \
   -H "Content-Type: application/json"
+```
+
+Generate cho một tag cụ thể:
+```bash
+curl -X POST "http://localhost:8080/api/generate-dummy" \
+  -H "Content-Type: application/json" \
+  -d '{"tag": "TAG_NAME"}'
 ```
 
 **Response:**
@@ -155,6 +174,10 @@ curl -X POST "http://localhost:8080/api/generate-dummy" \
   "message": "Error message here"
 }
 ```
+
+**Error Cases:**
+- `tag 'TAG_NAME' not found in tag list` - Khi request single tag nhưng tag không tồn tại trong `tag_list.json`
+- Các lỗi khác giống như khi generate tất cả tags (file không tồn tại, parse lỗi, database error, etc.)
 
 **Response Fields:**
 
@@ -192,12 +215,14 @@ curl -X POST "http://localhost:8080/api/generate-dummy" \
 
 **Important Notes:**
 
-- **Data Replacement**: API này sẽ **xóa tất cả records hiện có** trong database trước khi generate batch mới. Điều này đảm bảo database chỉ chứa data mới nhất từ lần generate gần nhất.
+- **Data Replacement Behavior**:
+  - **Generate tất cả tags**: API sẽ **xóa tất cả records hiện có** trong database trước khi generate batch mới. Điều này đảm bảo database chỉ chứa data mới nhất từ lần generate gần nhất.
+  - **Generate single tag**: API sẽ **chỉ xóa records của tag đó** trước khi generate. Data của các tags khác sẽ được giữ nguyên. Điều này cho phép bạn generate/regenerate data cho từng tag độc lập mà không ảnh hưởng đến data của các tags khác.
 - Quá trình generate có thể mất nhiều thời gian do số lượng records lớn (~89,280 records/tag)
 - Data được commit theo batches (mỗi 10,000 records) để tránh memory issues
-- Progress được log mỗi 10 tags đã xử lý
+- Progress được log cho mỗi tag đã xử lý
 - Nếu một tag lỗi, toàn bộ quá trình sẽ dừng và trả về lỗi
-- **Warning**: Nếu bạn có data quan trọng trong database, hãy backup trước khi gọi API này
+- **Warning**: Khi generate tất cả tags, tất cả data trong database sẽ bị xóa. Hãy backup trước nếu có data quan trọng.
 
 **Performance Considerations:**
 
@@ -462,7 +487,7 @@ curl -s "http://localhost:8080/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31
 
 **Build:**
 ```bash
-go build -o server ./cmd/server
+cd backend && go build -o ../server ./cmd/server
 ```
 
 **Run:**

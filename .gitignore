@@ -71,6 +71,19 @@ dist/
 build/
 bin/
 
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm/
+.yarn/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+
 # OS files
 Thumbs.db
 .DS_Store

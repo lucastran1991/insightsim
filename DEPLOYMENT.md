@@ -167,7 +167,7 @@ Nếu script tự động không hoạt động, bạn có thể deploy thủ c�
 
 ```bash
 # 1. Build locally
-go build -o insightsim ./cmd/server
+cd backend && go build -o ../insightsim ./cmd/server
 
 # 2. Copy to EC2
 scp -i ~/.ssh/key.pem insightsim user@ec2-host:/tmp/
