@@ -351,8 +351,8 @@ elif command -v netstat &> /dev/null; then
     fi
 fi
 
-# Check for frontend process on port 3000 (default Next.js port)
-FRONTEND_PORT=3000
+# Check for frontend process on port 8086 (default Next.js port)
+FRONTEND_PORT=8086
 if command -v lsof &> /dev/null; then
     FRONTEND_PID=$(lsof -Pi :$FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null)
     if [ -n "$FRONTEND_PID" ]; then
