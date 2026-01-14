@@ -11,9 +11,10 @@ EC2_USER="${EC2_USER:-ubuntu}"
 EC2_KEY="${EC2_KEY:-~/.ssh/id_rsa}"
 APP_NAME="insightsim"
 APP_DIR="/opt/insightsim"
-SERVICE_NAME="insightsim"
+ECOSYSTEM_FILE="ecosystem.config.js"
 DB_PATH="/opt/insightsim/data/insightsim.db"
 PORT="${PORT:-8080}"
+FRONTEND_PORT="${FRONTEND_PORT:-8086}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -38,7 +39,7 @@ usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Deploy Insightsim backend and frontend to AWS EC2 instance.
+Deploy Insightsim backend and frontend to AWS EC2 instance using PM2.
 
 Options:
     -h, --host HOST          EC2 instance hostname or IP (required)
@@ -47,7 +48,6 @@ Options:
     -p, --port PORT          Application port (default: 8080)
     --skip-build             Skip building the application locally
     --skip-upload            Skip uploading files to EC2
-    --skip-service           Skip creating systemd service
     --help                   Show this help message
 
 Environment Variables:
@@ -67,7 +67,6 @@ EOF
 # Parse arguments
 SKIP_BUILD=false
 SKIP_UPLOAD=false
-SKIP_SERVICE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -93,10 +92,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-upload)
             SKIP_UPLOAD=true
-            shift
-            ;;
-        --skip-service)
-            SKIP_SERVICE=true
             shift
             ;;
         --help)
@@ -146,18 +141,20 @@ if [ "$SKIP_BUILD" = false ]; then
     
     # Build frontend if available
     if [ -d "frontend" ]; then
-        log_info "Building frontend application..."
+        log_info "Building frontend application (Production)..."
         if ! command -v node &> /dev/null; then
             log_warn "Node.js is not installed. Frontend will not be built."
-            log_warn "Install Node.js to enable frontend deployment: https://nodejs.org/"
         elif ! command -v npm &> /dev/null; then
             log_warn "npm is not installed. Frontend will not be built."
         else
             log_info "Installing frontend dependencies..."
             (cd frontend && npm install)
-            log_info "Frontend dependencies installed"
-            # Note: We don't build frontend for production here, we'll run dev server on EC2
-            # If you want production build, uncomment: (cd frontend && npm run build)
+            log_info "Building frontend..."
+            if ! (cd frontend && npm run build); then
+                log_error "Failed to build frontend"
+                exit 1
+            fi
+            log_info "Frontend production build successful"
         fi
     else
         log_warn "Frontend directory not found, skipping frontend build"
@@ -175,201 +172,131 @@ DEPLOY_PACKAGE="$TEMP_DIR/deploy.tar.gz"
 cp "$APP_NAME" "$TEMP_DIR/"
 cp -r raw_data "$TEMP_DIR/" 2>/dev/null || log_warn "raw_data directory not found, skipping"
 cp backend/go.mod backend/go.sum "$TEMP_DIR/" 2>/dev/null || log_warn "go.mod/go.sum not found, skipping"
-cp -r backend/cmd "$TEMP_DIR/" 2>/dev/null || log_warn "cmd directory not found, skipping"
-cp -r backend/internal "$TEMP_DIR/" 2>/dev/null || log_warn "internal directory not found, skipping"
+# We don't need all source code on server, just binary and assets
+# But keeping config is good
 cp config.json "$TEMP_DIR/" 2>/dev/null || cp config.json.example "$TEMP_DIR/config.json" 2>/dev/null || log_warn "config.json not found, will use defaults"
 
 # Copy frontend if available
 if [ -d "frontend" ]; then
     log_info "Including frontend in deployment package..."
-    cp -r frontend "$TEMP_DIR/" 2>/dev/null || log_warn "Failed to copy frontend directory"
+    # Copy only necessary files for Next.js production run
+    mkdir -p "$TEMP_DIR/frontend"
+    cp frontend/package.json "$TEMP_DIR/frontend/"
+    cp frontend/package-lock.json "$TEMP_DIR/frontend/"
+    cp -r frontend/.next "$TEMP_DIR/frontend/"
+    cp -r frontend/public "$TEMP_DIR/frontend/" 2>/dev/null || true
+    cp frontend/next.config.js "$TEMP_DIR/frontend/" 2>/dev/null || true
 fi
 
-# Create deployment script
-cat > "$TEMP_DIR/setup.sh" << 'SETUP_EOF'
+# Create Ecosystem file for PM2
+cat > "$TEMP_DIR/$ECOSYSTEM_FILE" << EOF
+module.exports = {
+  apps: [
+    {
+      name: '${APP_NAME}-backend',
+      script: './${APP_NAME}',
+      args: '-db ${DB_PATH} -port ${PORT}',
+      cwd: '${APP_DIR}',
+      env: {
+        PORT: '${PORT}'
+      },
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      error_file: '${APP_DIR}/logs/backend-error.log',
+      out_file: '${APP_DIR}/logs/backend-out.log',
+      merge_logs: true
+    },
+    {
+      name: '${APP_NAME}-frontend',
+      script: 'npm',
+      args: 'start',
+      cwd: '${APP_DIR}/frontend',
+      env: {
+        PORT: '${FRONTEND_PORT}',
+        NEXT_PUBLIC_API_URL: 'http://localhost:${PORT}'
+      },
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      error_file: '${APP_DIR}/logs/frontend-error.log',
+      out_file: '${APP_DIR}/logs/frontend-out.log',
+      merge_logs: true
+    }
+  ]
+};
+EOF
+
+# Create setup script
+cat > "$TEMP_DIR/setup.sh" << SETUPEOF
 #!/bin/bash
 set -e
 
-APP_NAME="insightsim"
 APP_DIR="/opt/insightsim"
-BACKEND_SERVICE_NAME="insightsim-backend"
-FRONTEND_SERVICE_NAME="insightsim-frontend"
-DB_PATH="/opt/insightsim/data/insightsim.db"
-LOG_FILE="/opt/insightsim/logs/out.log"
-PORT="${PORT:-8080}"
-FRONTEND_PORT="${FRONTEND_PORT:-8086}"
+ECOSYSTEM_FILE="ecosystem.config.js"
 
-# Create application directory
-sudo mkdir -p "$APP_DIR/data"
-sudo mkdir -p "$APP_DIR/logs"
-sudo mkdir -p "$APP_DIR/frontend"
+# Create directories
+sudo mkdir -p "\$APP_DIR/data"
+sudo mkdir -p "\$APP_DIR/logs"
+sudo mkdir -p "\$APP_DIR/frontend"
 
-# Copy application
-sudo cp "$APP_NAME" "$APP_DIR/"
-sudo chmod +x "$APP_DIR/$APP_NAME"
+# Change ownership to current user to allow PM2 to run without sudo issues
+sudo chown -R \$USER:\$USER "\$APP_DIR"
 
-# Copy raw_data if exists
+# Copy files
+cp insightsim "\$APP_DIR/"
+chmod +x "\$APP_DIR/insightsim"
+cp $ECOSYSTEM_FILE "\$APP_DIR/"
+
 if [ -d "raw_data" ]; then
-    sudo cp -r raw_data "$APP_DIR/"
+    cp -r raw_data "\$APP_DIR/"
 fi
 
-# Copy frontend if exists
 if [ -d "frontend" ]; then
-    sudo cp -r frontend/* "$APP_DIR/frontend/"
-    echo "Frontend files copied"
+    cp -r frontend/* "\$APP_DIR/frontend/"
+    cp frontend/.next "\$APP_DIR/frontend/" -r 2>/dev/null || true
 fi
 
-# Create backend systemd service file
-sudo tee "/etc/systemd/system/${BACKEND_SERVICE_NAME}.service" > /dev/null << EOF
-[Unit]
-Description=Insightsim Backend Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=$APP_DIR
-ExecStart=$APP_DIR/$APP_NAME -db $DB_PATH -port $PORT
-Restart=always
-RestartSec=10
-StandardOutput=append:$LOG_FILE
-StandardError=append:$LOG_FILE
-SyslogIdentifier=$BACKEND_SERVICE_NAME
-
-# Environment variables
-Environment="PORT=$PORT"
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Check if Node.js is installed for frontend
-FRONTEND_AVAILABLE=false
-if command -v node &> /dev/null && command -v npm &> /dev/null; then
-    FRONTEND_AVAILABLE=true
-    # Install PM2 globally if not available
-    if ! command -v pm2 &> /dev/null; then
-        echo "Installing PM2..."
-        sudo npm install -g pm2
-    fi
-    
-    # Install frontend dependencies
-    if [ -d "$APP_DIR/frontend" ] && [ -f "$APP_DIR/frontend/package.json" ]; then
-        echo "Installing frontend dependencies..."
-        (cd "$APP_DIR/frontend" && sudo npm install)
-    fi
-    
-    # Create frontend systemd service file
-    sudo tee "/etc/systemd/system/${FRONTEND_SERVICE_NAME}.service" > /dev/null << EOF
-[Unit]
-Description=Insightsim Frontend Service
-After=network.target ${BACKEND_SERVICE_NAME}.service
-Requires=${BACKEND_SERVICE_NAME}.service
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=$APP_DIR/frontend
-ExecStart=/usr/bin/npm run dev
-Restart=always
-RestartSec=10
-StandardOutput=append:$LOG_FILE
-StandardError=append:$LOG_FILE
-SyslogIdentifier=$FRONTEND_SERVICE_NAME
-
-# Environment variables
-Environment="PORT=$FRONTEND_PORT"
-Environment="NEXT_PUBLIC_API_URL=http://localhost:$PORT"
-
-[Install]
-WantedBy=multi-user.target
-EOF
-else
-    echo "WARNING: Node.js/npm not found. Frontend service will not be created."
-    echo "WARNING: Install Node.js to enable frontend: curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - && sudo apt-get install -y nodejs"
+# Install Node.js & PM2 if missing
+if ! command -v node &> /dev/null; then
+    echo "Installing Node.js..."
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt-get install -y nodejs
 fi
 
-# Stop existing services if they exist (before reloading systemd)
-echo "Stopping existing services if they exist..."
-if sudo systemctl is-active --quiet "$BACKEND_SERVICE_NAME" 2>/dev/null; then
-    echo "Stopping existing backend service..."
-    sudo systemctl stop "$BACKEND_SERVICE_NAME" 2>/dev/null || true
-    sleep 1
+if ! command -v pm2 &> /dev/null; then
+    echo "Installing PM2..."
+    sudo npm install -g pm2
 fi
 
-if sudo systemctl is-active --quiet "$FRONTEND_SERVICE_NAME" 2>/dev/null; then
-    echo "Stopping existing frontend service..."
-    sudo systemctl stop "$FRONTEND_SERVICE_NAME" 2>/dev/null || true
-    sleep 1
+# Install frontend production dependencies
+if [ -d "\$APP_DIR/frontend" ]; then
+    echo "Installing frontend production dependencies..."
+    (cd "\$APP_DIR/frontend" && npm install --production)
 fi
 
-# Also kill any processes that might be running on the ports
-echo "Checking for processes on ports..."
-if command -v lsof &> /dev/null; then
-    # Kill backend port
-    BACKEND_PID=$(sudo lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null || true)
-    if [ -n "$BACKEND_PID" ]; then
-        echo "Killing process $BACKEND_PID on backend port $PORT..."
-        sudo kill -9 "$BACKEND_PID" 2>/dev/null || true
-        sleep 1
+# Cleanup old systemd services if they exist
+echo "Cleaning up old systemd services..."
+for svc in insightsim insightsim-backend insightsim-frontend; do
+    if sudo systemctl is-active --quiet \$svc; then
+        sudo systemctl stop \$svc
+        sudo systemctl disable \$svc
     fi
-    
-    # Kill frontend port
-    FRONTEND_PID=$(sudo lsof -Pi :$FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null || true)
-    if [ -n "$FRONTEND_PID" ]; then
-        echo "Killing process $FRONTEND_PID on frontend port $FRONTEND_PORT..."
-        sudo kill -9 "$FRONTEND_PID" 2>/dev/null || true
-        sleep 1
+    if [ -f "/etc/systemd/system/\$svc.service" ]; then
+        sudo rm "/etc/systemd/system/\$svc.service"
     fi
-elif command -v netstat &> /dev/null; then
-    # Fallback for systems without lsof
-    BACKEND_PID=$(sudo netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1 || true)
-    if [ -n "$BACKEND_PID" ] && [ "$BACKEND_PID" != "-" ]; then
-        echo "Killing process $BACKEND_PID on backend port $PORT..."
-        sudo kill -9 "$BACKEND_PID" 2>/dev/null || true
-        sleep 1
-    fi
-    
-    FRONTEND_PID=$(sudo netstat -tlnp 2>/dev/null | grep ":$FRONTEND_PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1 || true)
-    if [ -n "$FRONTEND_PID" ] && [ "$FRONTEND_PID" != "-" ]; then
-        echo "Killing process $FRONTEND_PID on frontend port $FRONTEND_PORT..."
-        sudo kill -9 "$FRONTEND_PID" 2>/dev/null || true
-        sleep 1
-    fi
-fi
-
-# Reload systemd
+done
 sudo systemctl daemon-reload
 
-# Enable and start backend service
-sudo systemctl enable "$BACKEND_SERVICE_NAME"
-sudo systemctl restart "$BACKEND_SERVICE_NAME"
+# Start processes with PM2
+echo "Starting applications with PM2..."
+cd "\$APP_DIR"
+pm2 start \$ECOSYSTEM_FILE
 
-# Wait a bit for backend to start
-sleep 3
+# Save PM2 list and generate startup script
+pm2 save
+# Note: startup command usually requires sudo and manual copy/paste in interactive shell
+# We try to run it automatically
+sudo env PATH=\$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u \$USER --hp \$HOME || true
 
-# Enable and start frontend service if available
-if [ "$FRONTEND_AVAILABLE" = true ] && [ -d "$APP_DIR/frontend" ]; then
-    sudo systemctl enable "$FRONTEND_SERVICE_NAME"
-    sudo systemctl restart "$FRONTEND_SERVICE_NAME"
-    echo "Frontend service started"
-fi
-
-echo "Deployment completed successfully"
-echo ""
-echo "Backend service status:"
-sudo systemctl status "$BACKEND_SERVICE_NAME" --no-pager -l | head -10 || true
-
-if [ "$FRONTEND_AVAILABLE" = true ]; then
-    echo ""
-    echo "Frontend service status:"
-    sudo systemctl status "$FRONTEND_SERVICE_NAME" --no-pager -l | head -10 || true
-fi
-
-echo ""
-echo "Combined logs are available at: $LOG_FILE"
-echo "View logs with: sudo tail -f $LOG_FILE"
-SETUP_EOF
+echo "Setup completed successfully!"
+SETUPEOF
 
 chmod +x "$TEMP_DIR/setup.sh"
 
@@ -390,52 +317,17 @@ fi
 log_info "Setting up application on EC2..."
 ssh -i "$EC2_KEY" -o StrictHostKeyChecking=no "$EC2_USER@$EC2_HOST" << EOF
     set -e
-    
-    # Extract package
     cd /tmp
     tar -xzf deploy.tar.gz
     rm deploy.tar.gz
-    
-    # Export PORT variable
-    export PORT=$PORT
-    
-    # Run setup script
     chmod +x setup.sh
-    sudo ./setup.sh
-    
-    # Cleanup
-    rm -rf /tmp/setup.sh /tmp/$APP_NAME /tmp/raw_data /tmp/go.mod /tmp/go.sum /tmp/frontend 2>/dev/null || true
+    ./setup.sh
+    rm -rf setup.sh insightsim raw_data go.mod go.sum frontend ecosystem.config.js
 EOF
 
 log_info "Deployment completed successfully!"
-
-# Show service status
-log_info "Checking service status..."
-ssh -i "$EC2_KEY" -o StrictHostKeyChecking=no "$EC2_USER@$EC2_HOST" "sudo systemctl status $SERVICE_NAME --no-pager -l | head -20" || true
+log_info "You can monitor your app with: ssh $EC2_USER@$EC2_HOST 'pm2 status'"
+log_info "Logs are available at: ssh $EC2_USER@$EC2_HOST 'pm2 logs'"
 
 # Cleanup local temp files
 rm -rf "$TEMP_DIR"
-
-log_info ""
-log_info "=========================================="
-log_info "Deployment Summary:"
-log_info "=========================================="
-log_info "EC2 Host: $EC2_HOST"
-log_info "Application: $APP_NAME"
-log_info "Backend Service: ${APP_NAME}-backend"
-log_info "Frontend Service: ${APP_NAME}-frontend"
-log_info "Backend Port: $PORT"
-log_info "Frontend Port: 8086 (default)"
-log_info "Database: $DB_PATH"
-log_info "Log File: /opt/insightsim/logs/out.log"
-log_info ""
-log_info "Useful commands:"
-log_info "  Check backend status: ssh $EC2_USER@$EC2_HOST 'sudo systemctl status ${APP_NAME}-backend'"
-log_info "  Check frontend status: ssh $EC2_USER@$EC2_HOST 'sudo systemctl status ${APP_NAME}-frontend'"
-log_info "  View combined logs: ssh $EC2_USER@$EC2_HOST 'sudo tail -f /opt/insightsim/logs/out.log'"
-log_info "  View backend logs: ssh $EC2_USER@$EC2_HOST 'sudo journalctl -u ${APP_NAME}-backend -f'"
-log_info "  View frontend logs: ssh $EC2_USER@$EC2_HOST 'sudo journalctl -u ${APP_NAME}-frontend -f'"
-log_info "  Restart backend: ssh $EC2_USER@$EC2_HOST 'sudo systemctl restart ${APP_NAME}-backend'"
-log_info "  Restart frontend: ssh $EC2_USER@$EC2_HOST 'sudo systemctl restart ${APP_NAME}-frontend'"
-log_info "  Stop all: ssh $EC2_USER@$EC2_HOST 'sudo systemctl stop ${APP_NAME}-backend ${APP_NAME}-frontend'"
-log_info "=========================================="
