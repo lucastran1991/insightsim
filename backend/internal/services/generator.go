@@ -2,16 +2,12 @@ package services
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"insightsim/internal/database"
-	"insightsim/internal/models"
 )
 
 // Generator handles generating dummy timeseries data
@@ -27,38 +23,18 @@ func NewGenerator(db *database.DB) *Generator {
 // OnTagComplete is called after each tag's data generation finishes (optional, may be nil).
 type OnTagComplete func(tag string, records int)
 
-// GenerateDummyData generates dummy data for tags from tag_list.json
+// GenerateDummyData generates dummy data for tags from the tags table in the DB.
 // If singleTag is provided, only generate for that tag; otherwise generate for all tags.
 // If onTagComplete is non-nil, it is called after each tag completes with the tag name and record count.
-func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue float64, useSequential bool, startTimeStr, endTimeStr string, singleTag string, onTagComplete OnTagComplete) (int, int, error) {
+func (g *Generator) GenerateDummyData(minValue, maxValue float64, useSequential bool, startTimeStr, endTimeStr string, singleTag string, onTagComplete OnTagComplete) (int, int, error) {
 	generateStartTime := time.Now()
 
-	// Read tag_list.json from config
-	tagListPath := tagListFile
-	if !filepath.IsAbs(tagListPath) {
-		tagListPath = filepath.Join(".", tagListPath)
-	}
-
-	fmt.Printf("[GENERATE] Reading tag list from: %s\n", tagListPath)
-	data, err := os.ReadFile(tagListPath)
+	tags, err := g.db.ListTagNamesFromTagsTable()
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to read tag_list.json: %w", err)
+		return 0, 0, fmt.Errorf("failed to list tags from DB: %w", err)
 	}
-
-	var tagList models.TagList
-	if err := json.Unmarshal(data, &tagList); err != nil {
-		return 0, 0, fmt.Errorf("failed to parse tag_list.json: %w", err)
-	}
-
-	// Parse tags (support both "tag_list" and "tag" keys)
-	tagListStr := tagList.GetTagList()
-	if tagListStr == "" {
-		return 0, 0, fmt.Errorf("no tags found in tag_list.json (check 'tag_list' or 'tag' key)")
-	}
-
-	tags := strings.Split(tagListStr, ",")
-	for i, tag := range tags {
-		tags[i] = strings.TrimSpace(tag)
+	if len(tags) == 0 {
+		return 0, 0, fmt.Errorf("no tags found in database (add tags via API first)")
 	}
 
 	// Filter to single tag if specified
@@ -78,7 +54,7 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 		fmt.Printf("[GENERATE] Filtered to single tag: %s\n", singleTag)
 	}
 
-	fmt.Printf("[GENERATE] Parsed %d tags from tag list\n", len(tags))
+	fmt.Printf("[GENERATE] Using %d tags from DB\n", len(tags))
 
 	// Parse time range from config
 	timeFormat := "2006-01-02T15:04:05"

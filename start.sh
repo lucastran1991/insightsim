@@ -71,6 +71,7 @@ Options:
     -s, --stop               Stop all PM2 processes (backend and frontend)
     -R, --restart            Restart all PM2 processes
     -l, --logs               Show combined PM2 logs (from out.log)
+    -P, --prod               Production mode: build frontend and run next start (not dev)
     -h, --help               Show this help message
 
 Environment Variables:
@@ -85,6 +86,7 @@ Examples:
     $0 --no-build             # Start without building backend
     $0 --stop                 # Stop all PM2 processes
     $0 --restart              # Restart all PM2 processes
+    $0 --prod                 # Start in production mode (frontend: next start)
     $0 --logs                 # View combined logs from out.log
     PORT=3000 DB_PATH=dev.db $0
 
@@ -94,6 +96,7 @@ EOF
 # Parse arguments
 SKIP_BUILD=false
 RUN_ONLY=false
+PROD_MODE=false
 ACTION="start"
 
 while [[ $# -gt 0 ]]; do
@@ -139,6 +142,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -l|--logs)
             ACTION="logs"
+            shift
+            ;;
+        -P|--prod)
+            PROD_MODE=true
             shift
             ;;
         -h|--help)
@@ -473,8 +480,19 @@ if [ "$FRONTEND_AVAILABLE" = true ] && [ -d "frontend" ]; then
     
     FRONTEND_DIR="$WORK_DIR/frontend"
     
-    # Start frontend with PM2
-    log_info "Starting frontend ($FRONTEND_PM2_NAME) with PM2..."
+    if [ "$PROD_MODE" = true ]; then
+        log_info "Production mode: building frontend..."
+        if ! (cd "$FRONTEND_DIR" && npm run build); then
+            log_error "Frontend build failed"
+            exit 1
+        fi
+        FRONTEND_SCRIPT="start"
+        log_info "Starting frontend ($FRONTEND_PM2_NAME) in production (next start)..."
+    else
+        FRONTEND_SCRIPT="dev"
+        log_info "Starting frontend ($FRONTEND_PM2_NAME) in dev mode (next dev)..."
+    fi
+    
     pm2 start npm \
         --name "$FRONTEND_PM2_NAME" \
         --cwd "$FRONTEND_DIR" \
@@ -483,7 +501,7 @@ if [ "$FRONTEND_AVAILABLE" = true ] && [ -d "frontend" ]; then
         --output "$WORK_DIR/out.log" \
         --merge-logs \
         --time \
-        -- run dev
+        -- run "$FRONTEND_SCRIPT"
     
     log_info "Frontend started successfully!"
 else

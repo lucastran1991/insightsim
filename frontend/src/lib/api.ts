@@ -4,6 +4,8 @@ import {
   LoadResponse,
   HealthResponse,
   UploadCsvResponse,
+  TagWithStats,
+  TagsListResponse,
 } from '@/types/api';
 import { API_BASE_URL, API_ENDPOINTS } from './config';
 
@@ -211,17 +213,16 @@ export async function uploadCsv(
 }
 
 /**
- * Get tag list from public tag_list.json file
+ * Get tag list from backend API (tags table)
  */
 export async function getTagList(): Promise<string[]> {
   try {
-    const response = await fetch('/tag_list.json');
+    const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.tags}/names`);
     if (response.ok) {
       const data = await response.json();
-      // Support both "tag" and "tag_list" keys
-      const tagListStr = data.tag || data.tag_list || '';
-      if (tagListStr) {
-        return tagListStr.split(',').map((tag: string) => tag.trim()).filter(Boolean);
+      const tags = data?.tags;
+      if (Array.isArray(tags)) {
+        return tags.map((t: unknown) => String(t).trim()).filter(Boolean);
       }
     }
   } catch (error) {
@@ -229,4 +230,60 @@ export async function getTagList(): Promise<string[]> {
   }
 
   return [];
+}
+
+/**
+ * Get a page of tags with stats from backend (paginated)
+ * @param page 1-based page (default 1)
+ * @param limit page size (default 9)
+ */
+export async function getTagsWithStats(
+  page: number = 1,
+  limit: number = 9
+): Promise<TagsListResponse> {
+  const url = `${API_BASE_URL}${API_ENDPOINTS.tags}?page=${page}&limit=${limit}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((err as { error?: string }).error || 'Failed to fetch tags');
+  }
+  const data = await response.json();
+  const rawItems = Array.isArray(data?.items) ? data.items : [];
+  const items = rawItems.map((row: Record<string, unknown>) => ({
+    tag: typeof row?.tag === 'string' ? row.tag : '',
+    created_at: row?.created_at != null ? String(row.created_at) : null,
+    updated_at: row?.updated_at != null ? String(row.updated_at) : null,
+    source: typeof row?.source === 'string' ? row.source : 'custom',
+  }));
+  return {
+    items,
+    total: typeof data?.total === 'number' ? data.total : 0,
+  };
+}
+
+/**
+ * Delete all data for a tag
+ */
+export async function deleteTag(tag: string): Promise<void> {
+  const url = `${API_BASE_URL}${API_ENDPOINTS.tags}?tag=${encodeURIComponent(tag)}`;
+  const response = await fetch(url, { method: 'DELETE' });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((err as { error?: string }).error || 'Failed to delete tag');
+  }
+}
+
+/**
+ * Create a new tag (add name to tag list)
+ */
+export async function createTag(tag: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.tags}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag: tag.trim() }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error((err as { error?: string }).error || 'Failed to create tag');
+  }
 }

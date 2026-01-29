@@ -10,6 +10,7 @@ Golang backend service cung cấp HTTP APIs để load và query timeseries data
   - [Health Check](#health-check)
   - [Load Data](#load-data)
   - [Generate Dummy Data](#generate-dummy-data)
+  - [Tags](#tags)
   - [Query Timeseries Data](#query-timeseries-data)
 - [Data Format](#data-format)
 - [Error Handling](#error-handling)
@@ -115,18 +116,19 @@ Khi có duplicate records (cùng tag và timestamp):
 - Chỉ xử lý các file có extension `.json` (case-insensitive)
 - Mỗi file được xử lý trong một transaction riêng
 - Nếu một file lỗi, toàn bộ quá trình sẽ dừng và trả về lỗi
+- **Tag registration:** Sau khi load thành công, mỗi tag mới trong JSON được tự động thêm vào bảng `tags` với `source` = `"load"`, nên tag xuất hiện trong GET /api/tags và trong generator.
 
 ---
 
 ### Generate Dummy Data
 
-Generate dummy timeseries data cho tags từ file `raw_data/tag_list.json`. Có thể generate cho tất cả tags hoặc chỉ một tag cụ thể.
+Generate dummy timeseries data cho tags lấy từ **bảng tags** trong database. Có thể generate cho tất cả tags trong DB hoặc chỉ một tag cụ thể.
 
 **Endpoint:** `POST /api/generate-dummy`
 
 **Request:**
 
-Request body là optional. Nếu không có body hoặc body rỗng, API sẽ generate cho tất cả tags. Nếu có `tag` trong body, chỉ generate cho tag đó.
+Request body là optional. Nếu không có body hoặc body rỗng, API sẽ generate cho tất cả tags trong DB. Nếu có `tag` trong body, chỉ generate cho tag đó.
 
 **Request Body (Optional):**
 ```json
@@ -135,8 +137,8 @@ Request body là optional. Nếu không có body hoặc body rỗng, API sẽ ge
 }
 ```
 
-- Nếu không có `tag` trong request body: Generate cho tất cả tags từ `tag_list.json`
-- Nếu có `tag`: Chỉ generate cho tag đó (tag phải tồn tại trong `tag_list.json`)
+- Nếu không có `tag` trong request body: Generate cho tất cả tags trong bảng `tags`
+- Nếu có `tag`: Chỉ generate cho tag đó (tag phải tồn tại trong bảng `tags`)
 
 **Request Examples:**
 
@@ -176,8 +178,8 @@ curl -X POST "http://localhost:8888/api/generate-dummy" \
 ```
 
 **Error Cases:**
-- `tag 'TAG_NAME' not found in tag list` - Khi request single tag nhưng tag không tồn tại trong `tag_list.json`
-- Các lỗi khác giống như khi generate tất cả tags (file không tồn tại, parse lỗi, database error, etc.)
+- `tag 'TAG_NAME' not found in tag list` - Khi request single tag nhưng tag không tồn tại trong bảng `tags`
+- Các lỗi khác (database error, etc.)
 
 **Response Fields:**
 
@@ -190,7 +192,7 @@ curl -X POST "http://localhost:8888/api/generate-dummy" \
 
 **Status Codes:**
 - `200 OK` - Generate thành công
-- `500 Internal Server Error` - Lỗi server (file không tồn tại, parse lỗi, database error)
+- `500 Internal Server Error` - Lỗi server (database error)
 
 **Data Specifications:**
 
@@ -227,6 +229,79 @@ curl -X POST "http://localhost:8888/api/generate-dummy" \
 **Performance Considerations:**
 
 Với ~200 tags và ~89,280 records/tag (2 tháng data), tổng số records có thể lên đến ~17.8 triệu records. Quá trình generate có thể mất vài phút đến vài chục phút tùy thuộc vào hardware.
+
+---
+
+### Tags
+
+Tag list và metadata (tag, created_at, updated_at, source) được lưu trong **bảng `tags`** trong database. Các API sau dùng DB làm nguồn duy nhất.
+
+**Tag registration:** Sau khi import CSV thành công (POST /api/upload-csv) hoặc load thành công (POST /api/load), mỗi tag mới được tự động thêm vào bảng `tags` với `source` = `"upload"` hoặc `"load"`, nên tag xuất hiện trong GET /api/tags và trong generator.
+
+#### GET /api/tags
+
+Trả về danh sách tags có phân trang từ DB.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page` | integer | No | Trang (default: 1) |
+| `limit` | integer | No | Số item mỗi trang (default: 20) |
+
+**Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "tag": "TAG_NAME",
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z",
+      "source": "custom"
+    }
+  ],
+  "total": 42
+}
+```
+
+- `items`: Mảng tag với `tag`, `created_at`, `updated_at`, `source`
+- `total`: Tổng số tags trong DB
+
+#### GET /api/tags/names
+
+Trả về danh sách tất cả tên tag từ DB (dùng cho dropdown/setup).
+
+**Response (200 OK):**
+```json
+["TAG1", "TAG2", "TAG3"]
+```
+
+#### POST /api/tags
+
+Tạo tag mới trong DB.
+
+**Request Body:**
+```json
+{
+  "tag": "TAG_NAME",
+  "source": "custom"
+}
+```
+
+- `tag` (required): Tên tag
+- `source` (optional): Nguồn tag, mặc định `"custom"`
+
+#### DELETE /api/tags
+
+Xóa tag khỏi DB và xóa toàn bộ dữ liệu của tag trong `insight_raws`.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `tag` | string | Yes | Tên tag cần xóa |
+
+**Example:** `DELETE /api/tags?tag=TAG_NAME`
 
 ---
 

@@ -34,3 +34,15 @@ export interface UploadCsvResponse {
   count?: number;
   tags_affected?: number;
 }
+
+export interface TagWithStats {
+  tag: string;
+  created_at: string | null;
+  updated_at: string | null;
+  source: string;
+}
+
+export interface TagsListResponse {
+  items: TagWithStats[];
+  total: number;
+}

@@ -27,7 +27,7 @@ type DatabaseConfig struct {
 // DataConfig represents data configuration
 type DataConfig struct {
 	RawDataFolder           string      `json:"raw_data_folder"`
-	TagListFile             string      `json:"tag_list_file"`
+	TagListFile             string      `json:"tag_list_file"` // Deprecated: tag list is now from DB; this field is unused
 	ValueRange              *ValueRange `json:"value_range,omitempty"`
 	UseSequentialGeneration bool        `json:"use_sequential_generation"`
 	GenerationStartTime     string      `json:"generation_start_time"`

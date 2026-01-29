@@ -65,7 +65,14 @@ func (u *UploadService) ImportFromCSV(reader io.Reader, mode ImportMode) (*Impor
 	// data rows
 	rows := records[1:]
 	if len(rows) == 0 {
-		return &ImportResult{Count: 0, TagsAffected: 0}, nil
+		// No data rows: still ensure every header tag exists in tags table
+		now := time.Now().UTC().Format(time.RFC3339)
+		for _, tag := range tags {
+			if err := u.db.InsertTagIfNotExists(tag, now, now, "upload"); err != nil {
+				return nil, fmt.Errorf("failed to register tag %s: %w", tag, err)
+			}
+		}
+		return &ImportResult{Count: 0, TagsAffected: len(tags)}, nil
 	}
 
 	conn := u.db.GetConn()
@@ -131,6 +138,14 @@ func (u *UploadService) ImportFromCSV(reader io.Reader, mode ImportMode) (*Impor
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit: %w", err)
+	}
+
+	// Ensure every CSV tag exists in tags table (create if not existed)
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, tag := range tags {
+		if err := u.db.InsertTagIfNotExists(tag, now, now, "upload"); err != nil {
+			return nil, fmt.Errorf("failed to register tag %s: %w", tag, err)
+		}
 	}
 
 	return &ImportResult{

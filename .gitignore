@@ -20,6 +20,7 @@ go.work
 # Application binaries
 # Only ignore binaries in root directory, not cmd/server/ directory
 /server$
+/backend/server$
 /insightsim$
 /insightsim.exe$
 # Explicitly allow cmd/server/ directory and its contents

@@ -201,7 +201,7 @@ export default function ChartPage() {
           </CardHeader>
           <CardBody pt={0}>
             <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} alignItems="flex-end">
-              <FormControl>
+              <FormControl minW={0}>
                 <TagSelector
                   tags={tags}
                   selectedTags={selectedTags}
@@ -209,13 +209,14 @@ export default function ChartPage() {
                   isMulti={true}
                 />
               </FormControl>
-              <FormControl maxW={{ md: '200px' }}>
+              <FormControl minW={0}>
                 <FormLabel fontSize="sm" color="gray.600">
                   Aggregate
                 </FormLabel>
                 <Select
                   value={aggregateMode}
                   onChange={(e) => setAggregateMode(e.target.value as AggregateMode)}
+                  width="100%"
                 >
                   <option value="raw">Raw</option>
                   <option value="daily">Daily</option>
@@ -224,7 +225,7 @@ export default function ChartPage() {
                   <option value="yearly">Yearly</option>
                 </Select>
               </FormControl>
-              <FormControl maxW={{ md: '220px' }}>
+              <FormControl minW={0}>
                 <FormLabel fontSize="sm" color="gray.600">
                   Time range
                 </FormLabel>
@@ -264,14 +265,16 @@ export default function ChartPage() {
                 <Heading size="sm" fontWeight="medium" color="gray.700">
                   Chart
                 </Heading>
-                <Button
-                  size="sm"
-                  colorScheme="blue"
-                  variant="outline"
-                  onClick={() => downloadCsv(data)}
-                >
-                  Download CSV
-                </Button>
+                {aggregateMode === 'raw' && (
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    variant="outline"
+                    onClick={() => downloadCsv(data)}
+                  >
+                    Download CSV
+                  </Button>
+                )}
               </Flex>
             </CardHeader>
             <CardBody p={0}>

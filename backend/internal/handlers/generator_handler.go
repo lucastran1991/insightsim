@@ -21,7 +21,6 @@ type streamEvent struct {
 // GeneratorHandler handles POST /api/generate-dummy requests
 type GeneratorHandler struct {
 	generator     *services.Generator
-	tagListFile   string
 	minValue      float64
 	maxValue      float64
 	useSequential bool
@@ -30,10 +29,9 @@ type GeneratorHandler struct {
 }
 
 // NewGeneratorHandler creates a new GeneratorHandler instance
-func NewGeneratorHandler(generator *services.Generator, tagListFile string, minValue, maxValue float64, useSequential bool, startTime, endTime string) *GeneratorHandler {
+func NewGeneratorHandler(generator *services.Generator, minValue, maxValue float64, useSequential bool, startTime, endTime string) *GeneratorHandler {
 	return &GeneratorHandler{
 		generator:     generator,
-		tagListFile:   tagListFile,
 		minValue:      minValue,
 		maxValue:      maxValue,
 		useSequential: useSequential,
@@ -101,7 +99,7 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		writeEvent(streamEvent{Event: "tag_complete", Tag: tag, Records: records})
 	}
 
-	count, tagsCount, err := h.generator.GenerateDummyData(h.tagListFile, h.minValue, h.maxValue, h.useSequential, h.startTime, h.endTime, req.Tag, onTagComplete)
+	count, tagsCount, err := h.generator.GenerateDummyData(h.minValue, h.maxValue, h.useSequential, h.startTime, h.endTime, req.Tag, onTagComplete)
 	if err != nil {
 		writeEvent(streamEvent{Event: "error", Message: err.Error()})
 		return

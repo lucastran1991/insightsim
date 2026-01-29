@@ -49,6 +49,7 @@ func main() {
 	queryService := services.NewQueryService(db)
 	generator := services.NewGenerator(db)
 	uploadService := services.NewUploadService(db)
+	tagsService := services.NewTagsService(db)
 
 	// Get value range from config (with defaults)
 	minValue := 1.0
@@ -74,8 +75,9 @@ func main() {
 	// Initialize handlers with config
 	loadHandler := handlers.NewLoadHandler(loader, cfg.Data.RawDataFolder)
 	queryHandler := handlers.NewQueryHandler(queryService)
-	generatorHandler := handlers.NewGeneratorHandler(generator, cfg.Data.TagListFile, minValue, maxValue, useSequential, startTime, endTime)
+	generatorHandler := handlers.NewGeneratorHandler(generator, minValue, maxValue, useSequential, startTime, endTime)
 	uploadHandler := handlers.NewUploadHandler(uploadService)
+	tagsHandler := handlers.NewTagsHandler(tagsService)
 
 	// Setup router
 	router := mux.NewRouter()
@@ -85,6 +87,10 @@ func main() {
 	api.HandleFunc("/load", loadHandler.Handle).Methods("POST")
 	api.HandleFunc("/generate-dummy", generatorHandler.Handle).Methods("POST")
 	api.HandleFunc("/upload-csv", uploadHandler.Handle).Methods("POST")
+	api.HandleFunc("/tags/names", tagsHandler.HandleListNames).Methods("GET")
+	api.HandleFunc("/tags", tagsHandler.HandleGet).Methods("GET")
+	api.HandleFunc("/tags", tagsHandler.HandleDelete).Methods("DELETE")
+	api.HandleFunc("/tags", tagsHandler.HandlePost).Methods("POST")
 	// Handle timeseriesdata with flexible path matching
 	api.PathPrefix("/timeseriesdata/").HandlerFunc(queryHandler.Handle).Methods("GET")
 
@@ -98,7 +104,7 @@ func main() {
 	corsMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusOK)
@@ -116,6 +122,10 @@ func main() {
 	log.Printf("  POST /api/generate-dummy")
 	log.Printf("  POST /api/upload-csv")
 	log.Printf("  GET  /api/timeseriesdata/{start}/{end}?tags=<tag1,tag2>")
+	log.Printf("  GET  /api/tags")
+	log.Printf("  DELETE /api/tags?tag=<name>")
+	log.Printf("  GET  /api/tags/names")
+	log.Printf("  POST /api/tags")
 	log.Printf("  GET  /health")
 
 	if err := http.ListenAndServe(addr, corsMiddleware(router)); err != nil {
