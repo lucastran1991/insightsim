@@ -147,7 +147,11 @@ export default function TimeseriesChart({ data }: TimeseriesChartProps) {
             tickFormatter={(v) => formatYAxisValue(Number(v))}
           />
           <Tooltip content={({ active, payload, label }) => (
-            <CustomTooltip active={active} payload={payload} label={label} />
+            <CustomTooltip
+              active={active}
+              payload={payload as TooltipProps<number, string>['payload']}
+              label={label}
+            />
           )} />
           <Legend
             wrapperStyle={{ paddingTop: 8 }}
