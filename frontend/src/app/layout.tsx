@@ -7,6 +7,9 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'Insightsim - Timeseries Data Visualization',
   description: 'Visualize and manage timeseries data',
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({
