@@ -332,57 +332,84 @@ if pm2 describe "$FRONTEND_PM2_NAME" > /dev/null 2>&1; then
     sleep 1
 fi
 
-# Also check for processes running on the backend port and kill them
+# Also check for processes running on the backend port and kill them (all PIDs)
 if command -v lsof &> /dev/null; then
-    BACKEND_PID=$(lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null) || true
-    if [ -n "$BACKEND_PID" ]; then
-        log_warn "Found process $BACKEND_PID running on backend port $PORT"
-        log_info "Killing process $BACKEND_PID..."
-        kill -9 "$BACKEND_PID" 2>/dev/null || true
-        sleep 1
+    BACKEND_PIDS=$(lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null) || true
+    if [ -n "$BACKEND_PIDS" ]; then
+        log_warn "Found process(es) on backend port $PORT: $BACKEND_PIDS"
+        for pid in $BACKEND_PIDS; do
+            [ -n "$pid" ] || continue
+            log_info "Killing process $pid..."
+            kill -9 "$pid" 2>/dev/null || true
+        done
+        sleep 2
     fi
 elif command -v netstat &> /dev/null; then
-    BACKEND_PID=$(netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1) || true
-    if [ -n "$BACKEND_PID" ] && [ "$BACKEND_PID" != "-" ]; then
-        log_warn "Found process $BACKEND_PID running on backend port $PORT"
+    for BACKEND_PID in $(netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1); do
+        [ -n "$BACKEND_PID" ] && [ "$BACKEND_PID" != "-" ] || continue
+        log_warn "Found process $BACKEND_PID on backend port $PORT"
         log_info "Killing process $BACKEND_PID..."
         kill -9 "$BACKEND_PID" 2>/dev/null || true
-        sleep 1
+    done
+    sleep 2
+fi
+# Fallback: use fuser to kill all processes on the port (Linux)
+if command -v fuser &> /dev/null; then
+    if fuser -n tcp "$PORT" &>/dev/null; then
+        log_info "Freeing port $PORT with fuser..."
+        fuser -k "$PORT/tcp" 2>/dev/null || true
+        sleep 2
     fi
 fi
 
 # Check for frontend process on port 8086 (default Next.js port)
 FRONTEND_PORT=8086
 if command -v lsof &> /dev/null; then
-    FRONTEND_PID=$(lsof -Pi :$FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null) || true
-    if [ -n "$FRONTEND_PID" ]; then
-        log_warn "Found process $FRONTEND_PID running on frontend port $FRONTEND_PORT"
-        log_info "Killing process $FRONTEND_PID..."
-        kill -9 "$FRONTEND_PID" 2>/dev/null || true
-        sleep 1
+    FRONTEND_PIDS=$(lsof -Pi :$FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null) || true
+    if [ -n "$FRONTEND_PIDS" ]; then
+        log_warn "Found process(es) on frontend port $FRONTEND_PORT: $FRONTEND_PIDS"
+        for pid in $FRONTEND_PIDS; do
+            [ -n "$pid" ] || continue
+            log_info "Killing process $pid..."
+            kill -9 "$pid" 2>/dev/null || true
+        done
+        sleep 2
     fi
 elif command -v netstat &> /dev/null; then
-    FRONTEND_PID=$(netstat -tlnp 2>/dev/null | grep ":$FRONTEND_PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1) || true
-    if [ -n "$FRONTEND_PID" ] && [ "$FRONTEND_PID" != "-" ]; then
-        log_warn "Found process $FRONTEND_PID running on frontend port $FRONTEND_PORT"
+    for FRONTEND_PID in $(netstat -tlnp 2>/dev/null | grep ":$FRONTEND_PORT " | awk '{print $7}' | cut -d'/' -f1); do
+        [ -n "$FRONTEND_PID" ] && [ "$FRONTEND_PID" != "-" ] || continue
+        log_warn "Found process $FRONTEND_PID on frontend port $FRONTEND_PORT"
         log_info "Killing process $FRONTEND_PID..."
         kill -9 "$FRONTEND_PID" 2>/dev/null || true
-        sleep 1
+    done
+    sleep 2
+fi
+if command -v fuser &> /dev/null; then
+    if fuser -n tcp "$FRONTEND_PORT" &>/dev/null; then
+        log_info "Freeing port $FRONTEND_PORT with fuser..."
+        fuser -k "$FRONTEND_PORT/tcp" 2>/dev/null || true
+        sleep 2
     fi
 fi
 
 log_info "Process cleanup completed"
 
-# Verify ports are now free
+# Verify ports are now free (retry once after 2s - kernel may delay releasing port)
 log_step "Verifying ports are available..."
-if command -v lsof &> /dev/null; then
-    if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
-        log_error "Port $PORT is still in use after cleanup"
-        exit 1
-    else
-        log_info "Backend port $PORT is available"
+BACKEND_PORT_FREE=false
+for attempt in 1 2; do
+    if ! command -v lsof &> /dev/null || ! lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+        BACKEND_PORT_FREE=true
+        break
     fi
-fi
+    if [ "$attempt" = "2" ]; then
+        log_error "Port $PORT is still in use after cleanup. Try: sudo lsof -i :$PORT or sudo fuser -k $PORT/tcp"
+        exit 1
+    fi
+    log_warn "Port $PORT still in use, waiting 2s..."
+    sleep 2
+done
+[ "$BACKEND_PORT_FREE" = true ] && log_info "Backend port $PORT is available"
 
 # Start backend with PM2
 log_info "Starting backend ($BACKEND_PM2_NAME) with PM2..."
