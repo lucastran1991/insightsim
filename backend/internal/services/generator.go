@@ -233,14 +233,6 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 					}
 					totalRecords++
 					tagRecords++
-
-					// Log every record generated
-					clampInfo := ""
-					if wasClamped {
-						clampInfo = fmt.Sprintf(" [CLAMPED: %.2f -> %.2f]", originalValue, newValue)
-					}
-					// fmt.Printf("[GENERATE] INSERT tag=%s timestamp=%s value=%.2f quality=%d%s\n",
-						tag, currentTime.Format("2006-01-02T15:04:05"), newValue, quality, clampInfo)
 				} else {
 					return 0, 0, fmt.Errorf("failed to check existing record: %w", err)
 				}
