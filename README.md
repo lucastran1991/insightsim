@@ -78,7 +78,7 @@ cd backend && go run ./cmd/server/main.go
 
 ```bash
 # Test health endpoint
-curl http://localhost:8080/health
+curl http://localhost:8888/health
 
 # Should return: OK
 ```
@@ -89,7 +89,7 @@ curl http://localhost:8080/health
 ./start.sh [OPTIONS]
 
 Options:
-  -p, --port PORT          Server port (default: 8080)
+  -p, --port PORT          Server port (default: 8888)
   -d, --db PATH            Database file path (default: insightsim.db)
   -b, --no-build           Skip building the application
   -r, --run-only           Run without building (use existing binary)
@@ -108,13 +108,13 @@ Environment Variables:
 
 Options:
   -db string     Path to SQLite database file (default: "insightsim.db")
-  -port string   Server port (default: "8080")
+  -port string   Server port (default: "8888")
 ```
 
 **Examples:**
 
 ```bash
-# Default settings (port 8080, database: insightsim.db)
+# Default settings (port 8888, database: insightsim.db)
 ./server
 
 # Custom database path
@@ -197,13 +197,13 @@ Xem chi tiết trong [API.md](API.md).
 
 **Or using binary directly:**
 ```bash
-./server -db insightsim.db -port 8080
+./server -db insightsim.db -port 8888
 ```
 
 Output:
 ```
 Database initialized at: insightsim.db
-Server starting on port 8080
+Server starting on port 8888
 API endpoints:
   POST /api/load
   POST /api/generate-dummy
@@ -214,21 +214,21 @@ API endpoints:
 ### 2. Load Data
 
 ```bash
-curl -X POST "http://localhost:8080/api/load" \
+curl -X POST "http://localhost:8888/api/load" \
   -H "Content-Type: application/json"
 ```
 
 ### 3. Generate Dummy Data
 
 ```bash
-curl -X POST "http://localhost:8080/api/generate-dummy" \
+curl -X POST "http://localhost:8888/api/generate-dummy" \
   -H "Content-Type: application/json"
 ```
 
 ### 4. Query Data
 
 ```bash
-curl "http://localhost:8080/api/timeseriesdata/2025-12-01T00:00:00/2026-01-31T23:59:59/?tags=RP447628.RPSYSFEDFR001A"
+curl "http://localhost:8888/api/timeseriesdata/2025-12-01T00:00:00/2026-01-31T23:59:59/?tags=RP447628.RPSYSFEDFR001A"
 ```
 
 ## Database
@@ -243,7 +243,7 @@ curl "http://localhost:8080/api/timeseriesdata/2025-12-01T00:00:00/2026-01-31T23
 
 ```bash
 # Check what's using the port
-lsof -i :8080
+lsof -i :8888
 
 # Kill the process
 kill -9 <PID>

@@ -2,7 +2,7 @@
 // Can be overridden by environment variable NEXT_PUBLIC_API_URL
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8088';
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888';
 
 export const API_ENDPOINTS = {
   health: '/health',

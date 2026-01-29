@@ -16,20 +16,20 @@ if [ -f "$CONFIG_FILE" ]; then
     # Try to use jq if available
     if command -v jq &> /dev/null; then
         DB_PATH="${DB_PATH:-$(jq -r '.database.path // "insightsim.db"' "$CONFIG_FILE")}"
-        PORT="${PORT:-$(jq -r '.server.port // "8080"' "$CONFIG_FILE")}"
+        PORT="${PORT:-$(jq -r '.server.port // "8888"' "$CONFIG_FILE")}"
     # Fallback to grep/sed if jq not available
     elif command -v python3 &> /dev/null; then
         DB_PATH="${DB_PATH:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('database', {}).get('path', 'insightsim.db'))" 2>/dev/null || echo "insightsim.db")}"
-        PORT="${PORT:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('server', {}).get('port', '8080'))" 2>/dev/null || echo "8080")}"
+        PORT="${PORT:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('server', {}).get('port', '8888'))" 2>/dev/null || echo "8888")}"
     else
         # Simple grep fallback (less reliable)
         DB_PATH="${DB_PATH:-$(grep -o '"path"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*"path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "insightsim.db")}"
-        PORT="${PORT:-$(grep -o '"port"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*"port"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "8080")}"
+        PORT="${PORT:-$(grep -o '"port"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*"port"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || echo "8888")}"
     fi
 else
     # Defaults if config file doesn't exist
     DB_PATH="${DB_PATH:-insightsim.db}"
-    PORT="${PORT:-8080}"
+    PORT="${PORT:-8888}"
 fi
 
 # Colors for output
@@ -105,10 +105,10 @@ while [[ $# -gt 0 ]]; do
             if [ -f "$CONFIG_FILE" ]; then
                 if command -v jq &> /dev/null; then
                     DB_PATH="${DB_PATH:-$(jq -r '.database.path // "insightsim.db"' "$CONFIG_FILE")}"
-                    PORT="${PORT:-$(jq -r '.server.port // "8080"' "$CONFIG_FILE")}"
+                    PORT="${PORT:-$(jq -r '.server.port // "8888"' "$CONFIG_FILE")}"
                 elif command -v python3 &> /dev/null; then
                     DB_PATH="${DB_PATH:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('database', {}).get('path', 'insightsim.db'))" 2>/dev/null || echo "insightsim.db")}"
-                    PORT="${PORT:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('server', {}).get('port', '8080'))" 2>/dev/null || echo "8080")}"
+                    PORT="${PORT:-$(python3 -c "import json; f=open('$CONFIG_FILE'); d=json.load(f); print(d.get('server', {}).get('port', '8888'))" 2>/dev/null || echo "8888")}"
                 fi
             fi
             ;;
@@ -314,23 +314,38 @@ FRONTEND_PM2_NAME="${APP_NAME}-frontend"
 
 log_step "Checking for existing processes..."
 
-# Kill backend PM2 process if exists
+# Stop/delete from current user's PM2
 if pm2 describe "$BACKEND_PM2_NAME" > /dev/null 2>&1; then
     log_warn "PM2 process '$BACKEND_PM2_NAME' already exists"
     log_info "Stopping and deleting existing backend process..."
     pm2 stop "$BACKEND_PM2_NAME" 2>/dev/null || true
     pm2 delete "$BACKEND_PM2_NAME" 2>/dev/null || true
-    sleep 1
 fi
-
-# Kill frontend PM2 process if exists
 if pm2 describe "$FRONTEND_PM2_NAME" > /dev/null 2>&1; then
     log_warn "PM2 process '$FRONTEND_PM2_NAME' already exists"
     log_info "Stopping and deleting existing frontend process..."
     pm2 stop "$FRONTEND_PM2_NAME" 2>/dev/null || true
     pm2 delete "$FRONTEND_PM2_NAME" 2>/dev/null || true
-    sleep 1
 fi
+
+# Also stop/delete from root's PM2 (e.g. leftover from previous deploy with sudo)
+# This prevents PM2 from immediately restarting the process when we kill by port
+if [ "$(id -u)" != "0" ] && command -v sudo &> /dev/null; then
+    if sudo pm2 describe "$BACKEND_PM2_NAME" > /dev/null 2>&1; then
+        log_warn "Found '$BACKEND_PM2_NAME' in root's PM2 (from previous deploy?)"
+        log_info "Stopping and deleting from root's PM2..."
+        sudo pm2 stop "$BACKEND_PM2_NAME" 2>/dev/null || true
+        sudo pm2 delete "$BACKEND_PM2_NAME" 2>/dev/null || true
+    fi
+    if sudo pm2 describe "$FRONTEND_PM2_NAME" > /dev/null 2>&1; then
+        log_warn "Found '$FRONTEND_PM2_NAME' in root's PM2 (from previous deploy?)"
+        log_info "Stopping and deleting from root's PM2..."
+        sudo pm2 stop "$FRONTEND_PM2_NAME" 2>/dev/null || true
+        sudo pm2 delete "$FRONTEND_PM2_NAME" 2>/dev/null || true
+    fi
+fi
+log_info "Waiting for processes to release ports..."
+sleep 3
 
 # Also check for processes running on the backend port and kill them (all PIDs)
 if command -v lsof &> /dev/null; then
@@ -403,7 +418,7 @@ for attempt in 1 2; do
         break
     fi
     if [ "$attempt" = "2" ]; then
-        log_error "Port $PORT is still in use after cleanup. Try: sudo lsof -i :$PORT or sudo fuser -k $PORT/tcp"
+        log_error "Port $PORT is still in use after cleanup. Try: sudo pm2 list && sudo pm2 delete insightsim-backend; sudo lsof -i :$PORT; sudo fuser -k $PORT/tcp"
         exit 1
     fi
     log_warn "Port $PORT still in use, waiting 2s..."

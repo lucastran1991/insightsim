@@ -19,7 +19,7 @@ Frontend application built with Next.js 13 and Chakra UI for visualizing and man
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Backend API running (default: http://localhost:8088)
+- Backend API running (default: http://localhost:8888)
 
 ### Installation
 
@@ -48,10 +48,10 @@ npm start
 The backend API URL can be configured via environment variable:
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8088 npm run dev
+NEXT_PUBLIC_API_URL=http://localhost:8888 npm run dev
 ```
 
-Default backend URL: `http://localhost:8088`
+Default backend URL: `http://localhost:8888`
 
 ## Project Structure
 

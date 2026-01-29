@@ -28,7 +28,7 @@ Service này cho phép:
 ## Base URL
 
 ```
-http://localhost:8080
+http://localhost:8888
 ```
 
 ## Endpoints
@@ -41,7 +41,7 @@ Kiểm tra trạng thái server.
 
 **Request:**
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8888/health
 ```
 
 **Response:**
@@ -66,7 +66,7 @@ API này không cần parameters. Nó sẽ tự động scan folder `raw_data/` 
 
 **Request Example:**
 ```bash
-curl -X POST "http://localhost:8080/api/load" \
+curl -X POST "http://localhost:8888/api/load" \
   -H "Content-Type: application/json"
 ```
 
@@ -142,13 +142,13 @@ Request body là optional. Nếu không có body hoặc body rỗng, API sẽ ge
 
 Generate cho tất cả tags:
 ```bash
-curl -X POST "http://localhost:8080/api/generate-dummy" \
+curl -X POST "http://localhost:8888/api/generate-dummy" \
   -H "Content-Type: application/json"
 ```
 
 Generate cho một tag cụ thể:
 ```bash
-curl -X POST "http://localhost:8080/api/generate-dummy" \
+curl -X POST "http://localhost:8888/api/generate-dummy" \
   -H "Content-Type: application/json" \
   -d '{"tag": "TAG_NAME"}'
 ```
@@ -253,17 +253,17 @@ Query timeseries data từ database với filtering theo date range và tags.
 
 **Query với một tag:**
 ```bash
-curl "http://localhost:8080/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/?tags=RP447628.RPSYSFEDFR001A"
+curl "http://localhost:8888/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/?tags=RP447628.RPSYSFEDFR001A"
 ```
 
 **Query với nhiều tags:**
 ```bash
-curl "http://localhost:8080/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/?tags=RP447628.RPSYSFEDFR001A,RP447628.RPSYSFEDFR001B"
+curl "http://localhost:8888/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/?tags=RP447628.RPSYSFEDFR001A,RP447628.RPSYSFEDFR001B"
 ```
 
 **Query tất cả tags trong date range:**
 ```bash
-curl "http://localhost:8080/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/"
+curl "http://localhost:8888/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/"
 ```
 
 **Response:**
@@ -396,7 +396,7 @@ Table: `insight_raws`
 
 **1. Load data từ tất cả JSON files trong raw_data folder:**
 ```bash
-curl -X POST "http://localhost:8080/api/load" \
+curl -X POST "http://localhost:8888/api/load" \
   -H "Content-Type: application/json"
 ```
 
@@ -412,7 +412,7 @@ curl -X POST "http://localhost:8080/api/load" \
 
 **2. Generate dummy data cho tất cả tags:**
 ```bash
-curl -X POST "http://localhost:8080/api/generate-dummy" \
+curl -X POST "http://localhost:8888/api/generate-dummy" \
   -H "Content-Type: application/json"
 ```
 
@@ -430,7 +430,7 @@ curl -X POST "http://localhost:8080/api/generate-dummy" \
 
 **3. Query data cho một ngày:**
 ```bash
-curl "http://localhost:8080/api/timeseriesdata/2025-01-01T00:00:00/2025-01-01T23:59:59/?tags=RP447628.RPSYSFEDFR001A"
+curl "http://localhost:8888/api/timeseriesdata/2025-01-01T00:00:00/2025-01-01T23:59:59/?tags=RP447628.RPSYSFEDFR001A"
 ```
 
 **Response:**
@@ -451,31 +451,31 @@ curl "http://localhost:8080/api/timeseriesdata/2025-01-01T00:00:00/2025-01-01T23
 
 **4. Query data cho một giờ:**
 ```bash
-curl "http://localhost:8080/api/timeseriesdata/2025-01-01T00:00:00/2025-01-01T01:00:00/?tags=RP447628.RPSYSFEDFR001A"
+curl "http://localhost:8888/api/timeseriesdata/2025-01-01T00:00:00/2025-01-01T01:00:00/?tags=RP447628.RPSYSFEDFR001A"
 ```
 
 **5. Query tất cả tags trong date range:**
 ```bash
-curl "http://localhost:8080/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/"
+curl "http://localhost:8888/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/"
 ```
 
 ### Using jq for Better Output
 
 **Count records:**
 ```bash
-curl -s "http://localhost:8080/api/timeseriesdata/2025-01-01T00:00:00/2025-01-01T23:59:59/?tags=RP447628.RPSYSFEDFR001A" | \
+curl -s "http://localhost:8888/api/timeseriesdata/2025-01-01T00:00:00/2025-01-01T23:59:59/?tags=RP447628.RPSYSFEDFR001A" | \
   jq '.result."RP447628.RPSYSFEDFR001A" | length'
 ```
 
 **Get first 3 records:**
 ```bash
-curl -s "http://localhost:8080/api/timeseriesdata/2025-01-01T00:00:00/2025-01-01T23:59:59/?tags=RP447628.RPSYSFEDFR001A" | \
+curl -s "http://localhost:8888/api/timeseriesdata/2025-01-01T00:00:00/2025-01-01T23:59:59/?tags=RP447628.RPSYSFEDFR001A" | \
   jq '.result."RP447628.RPSYSFEDFR001A" | .[0:3]'
 ```
 
 **List all tags:**
 ```bash
-curl -s "http://localhost:8080/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/" | \
+curl -s "http://localhost:8888/api/timeseriesdata/2024-01-01T00:00:00/2025-08-31T23:59:59/" | \
   jq '.result | keys'
 ```
 
@@ -492,12 +492,12 @@ cd backend && go build -o ../server ./cmd/server
 
 **Run:**
 ```bash
-./server -db insightsim.db -port 8080
+./server -db insightsim.db -port 8888
 ```
 
 **Flags:**
 - `-db`: Path to SQLite database file (default: `insightsim.db`)
-- `-port`: Server port (default: `8080`)
+- `-port`: Server port (default: `8888`)
 
 **Example:**
 ```bash
@@ -511,7 +511,7 @@ Deploy backend lên AWS EC2 instance sử dụng deployment script.
 **Prerequisites:**
 - AWS EC2 instance đã được tạo và running
 - SSH key để kết nối đến EC2
-- Security Group đã mở port 8080 (hoặc port bạn sử dụng)
+- Security Group đã mở port 8888 (hoặc port bạn sử dụng)
 
 **Basic Usage:**
 ```bash
@@ -520,7 +520,7 @@ Deploy backend lên AWS EC2 instance sử dụng deployment script.
 
 **With Custom Options:**
 ```bash
-./deploy.sh -h 1.2.3.4 -u ec2-user -k ~/.ssh/my-key.pem -p 8080
+./deploy.sh -h 1.2.3.4 -u ec2-user -k ~/.ssh/my-key.pem -p 8888
 ```
 
 **Using Environment Variables:**
@@ -528,7 +528,7 @@ Deploy backend lên AWS EC2 instance sử dụng deployment script.
 export EC2_HOST="1.2.3.4"
 export EC2_USER="ubuntu"
 export EC2_KEY="~/.ssh/id_rsa"
-export PORT="8080"
+export PORT="8888"
 ./deploy.sh
 ```
 
@@ -536,7 +536,7 @@ export PORT="8080"
 - `-h, --host HOST`: EC2 instance hostname or IP (required)
 - `-u, --user USER`: SSH user (default: ubuntu)
 - `-k, --key KEY`: SSH private key path (default: ~/.ssh/id_rsa)
-- `-p, --port PORT`: Application port (default: 8080)
+- `-p, --port PORT`: Application port (default: 8888)
 - `--skip-build`: Skip building the application locally
 - `--skip-upload`: Skip uploading files to EC2
 - `--skip-service`: Skip creating systemd service
@@ -576,7 +576,7 @@ ssh user@ec2-host 'sudo systemctl stop insightsim'
 **Verify Deployment:**
 ```bash
 # Test health endpoint
-curl http://EC2_HOST:8080/health
+curl http://EC2_HOST:8888/health
 
 # Should return: OK
 ```

@@ -26,12 +26,12 @@ type DatabaseConfig struct {
 
 // DataConfig represents data configuration
 type DataConfig struct {
-	RawDataFolder          string      `json:"raw_data_folder"`
-	TagListFile            string      `json:"tag_list_file"`
-	ValueRange             *ValueRange  `json:"value_range,omitempty"`
-	UseSequentialGeneration bool       `json:"use_sequential_generation"`
-	GenerationStartTime    string      `json:"generation_start_time"`
-	GenerationEndTime      string      `json:"generation_end_time"`
+	RawDataFolder           string      `json:"raw_data_folder"`
+	TagListFile             string      `json:"tag_list_file"`
+	ValueRange              *ValueRange `json:"value_range,omitempty"`
+	UseSequentialGeneration bool        `json:"use_sequential_generation"`
+	GenerationStartTime     string      `json:"generation_start_time"`
+	GenerationEndTime       string      `json:"generation_end_time"`
 }
 
 // ValueRange represents the range for random value generation
@@ -61,7 +61,7 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// Set defaults if not specified
 	if config.Server.Port == "" {
-		config.Server.Port = "8080"
+		config.Server.Port = "8888"
 	}
 	if config.Server.Host == "" {
 		config.Server.Host = "0.0.0.0"
@@ -109,15 +109,15 @@ func LoadConfigWithDefaults(configPath string) (*Config, error) {
 		if os.IsNotExist(err) {
 			return &Config{
 				Server: ServerConfig{
-					Port: "8080",
+					Port: "8888",
 					Host: "0.0.0.0",
 				},
 				Database: DatabaseConfig{
 					Path: "insightsim.db",
 				},
 				Data: DataConfig{
-					RawDataFolder:          "raw_data",
-					TagListFile:            "raw_data/tag_list.json",
+					RawDataFolder: "raw_data",
+					TagListFile:   "raw_data/tag_list.json",
 					ValueRange: &ValueRange{
 						Min: 1.0,
 						Max: 10000.0,

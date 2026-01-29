@@ -7,7 +7,7 @@ Hướng dẫn deploy Insightsim backend lên AWS EC2 instance.
 1. **AWS EC2 Instance** đã được tạo và running
 2. **SSH Key** để kết nối đến EC2 instance
 3. **Go** đã được cài đặt trên máy local (để build application)
-4. **Security Group** của EC2 instance đã mở port 8080 (hoặc port bạn muốn sử dụng)
+4. **Security Group** của EC2 instance đã mở port 8888 (hoặc port bạn muốn sử dụng)
 
 ## Quick Start
 
@@ -16,10 +16,10 @@ Hướng dẫn deploy Insightsim backend lên AWS EC2 instance.
 Đảm bảo EC2 Security Group đã mở port cho application:
 
 ```bash
-# Mở port 8080 từ bất kỳ đâu (hoặc chỉ từ IP của bạn)
+# Mở port 8888 từ bất kỳ đâu (hoặc chỉ từ IP của bạn)
 # Inbound Rules:
 #   Type: Custom TCP
-#   Port: 8080
+#   Port: 8888
 #   Source: 0.0.0.0/0 (hoặc IP cụ thể của bạn)
 ```
 
@@ -33,11 +33,11 @@ Hướng dẫn deploy Insightsim backend lên AWS EC2 instance.
 export EC2_HOST="ec2-1-2-3-4.compute-1.amazonaws.com"
 export EC2_USER="ubuntu"
 export EC2_KEY="~/.ssh/my-key.pem"
-export PORT="8080"
+export PORT="8888"
 ./deploy.sh
 
 # Cách 3: Kết hợp cả hai
-./deploy.sh -h 1.2.3.4 -u ec2-user -k ~/.ssh/my-key.pem -p 8080
+./deploy.sh -h 1.2.3.4 -u ec2-user -k ~/.ssh/my-key.pem -p 8888
 ```
 
 ## Deployment Script Options
@@ -49,7 +49,7 @@ Options:
     -h, --host HOST          EC2 instance hostname or IP (required)
     -u, --user USER          SSH user (default: ubuntu)
     -k, --key KEY            SSH private key path (default: ~/.ssh/id_rsa)
-    -p, --port PORT          Application port (default: 8080)
+    -p, --port PORT          Application port (default: 8888)
     --skip-build             Skip building the application locally
     --skip-upload            Skip uploading files to EC2
     --skip-service           Skip creating systemd service
@@ -120,10 +120,10 @@ Sau khi deploy, kiểm tra service:
 ssh user@ec2-host 'sudo systemctl status insightsim'
 
 # 2. Check if application is listening
-ssh user@ec2-host 'sudo netstat -tlnp | grep 8080'
+ssh user@ec2-host 'sudo netstat -tlnp | grep 8888'
 
 # 3. Test API endpoint
-curl http://EC2_HOST:8080/health
+curl http://EC2_HOST:8888/health
 ```
 
 ## Troubleshooting
@@ -135,7 +135,7 @@ curl http://EC2_HOST:8080/health
 ssh -i ~/.ssh/key.pem user@ec2-host
 
 # Check if port is accessible
-telnet EC2_HOST 8080
+telnet EC2_HOST 8888
 ```
 
 ### Service Not Starting
@@ -145,7 +145,7 @@ telnet EC2_HOST 8080
 ssh user@ec2-host 'sudo journalctl -u insightsim -n 50'
 
 # Check if port is already in use
-ssh user@ec2-host 'sudo lsof -i :8080'
+ssh user@ec2-host 'sudo lsof -i :8888'
 
 # Check file permissions
 ssh user@ec2-host 'ls -la /opt/insightsim/'
@@ -209,7 +209,7 @@ Bạn có thể set environment variables trong systemd service file:
 sudo nano /etc/systemd/system/insightsim.service
 
 # Add under [Service] section:
-Environment="PORT=8080"
+Environment="PORT=8888"
 Environment="DB_PATH=/opt/insightsim/data/insightsim.db"
 
 # Reload and restart

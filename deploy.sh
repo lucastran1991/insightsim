@@ -13,7 +13,7 @@ APP_NAME="insightsim"
 APP_DIR="/opt/insightsim"
 ECOSYSTEM_FILE="ecosystem.config.js"
 DB_PATH="/opt/insightsim/data/insightsim.db"
-PORT="${PORT:-8080}"
+PORT="${PORT:-8888}"
 FRONTEND_PORT="${FRONTEND_PORT:-8086}"
 
 # Colors for output
@@ -45,7 +45,7 @@ Options:
     -h, --host HOST          EC2 instance hostname or IP (required)
     -u, --user USER          SSH user (default: ubuntu)
     -k, --key KEY            SSH private key path (default: ~/.ssh/id_rsa)
-    -p, --port PORT          Application port (default: 8080)
+    -p, --port PORT          Application port (default: 8888)
     --skip-build             Skip building the application locally
     --skip-upload            Skip uploading files to EC2
     --help                   Show this help message
