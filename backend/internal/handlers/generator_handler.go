@@ -42,7 +42,9 @@ func NewGeneratorHandler(generator *services.Generator, minValue, maxValue float
 
 // GenerateRequest represents the request body for generate-dummy endpoint
 type GenerateRequest struct {
-	Tag string `json:"tag,omitempty"` // Optional: if provided, only generate for this tag
+	Tag   string `json:"tag,omitempty"`   // Optional: if provided, only generate for this tag
+	Start string `json:"start,omitempty"` // Optional: start time (ISO 8601). If set, overrides config.
+	End   string `json:"end,omitempty"`   // Optional: end time (ISO 8601). If set, overrides config.
 }
 
 // GenerateResponse represents the response from generate-dummy endpoint
@@ -77,8 +79,18 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		tagInfo = fmt.Sprintf("single tag: %s", req.Tag)
 	}
 
+	// Use request start/end if provided; otherwise use config defaults
+	startTime := h.startTime
+	endTime := h.endTime
+	if req.Start != "" {
+		startTime = req.Start
+	}
+	if req.End != "" {
+		endTime = req.End
+	}
+
 	fmt.Printf("[API] POST /api/generate-dummy - Starting generation for %s (value range: %.2f-%.2f, mode: %s, time range: %s to %s)\n",
-		tagInfo, h.minValue, h.maxValue, mode, h.startTime, h.endTime)
+		tagInfo, h.minValue, h.maxValue, mode, startTime, endTime)
 
 	// Stream NDJSON: set headers and prepare flusher
 	w.Header().Set("Content-Type", "application/x-ndjson")
@@ -99,7 +111,7 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		writeEvent(streamEvent{Event: "tag_complete", Tag: tag, Records: records})
 	}
 
-	count, tagsCount, err := h.generator.GenerateDummyData(h.minValue, h.maxValue, h.useSequential, h.startTime, h.endTime, req.Tag, onTagComplete)
+	count, tagsCount, err := h.generator.GenerateDummyData(h.minValue, h.maxValue, h.useSequential, startTime, endTime, req.Tag, onTagComplete)
 	if err != nil {
 		writeEvent(streamEvent{Event: "error", Message: err.Error()})
 		return

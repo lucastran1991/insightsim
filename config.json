@@ -14,7 +14,7 @@
       "max": 10000.0
     },
     "use_sequential_generation": false,
-    "generation_start_time": "2025-06-01T00:00:00",
+    "generation_start_time": "2026-01-01T00:00:00",
     "generation_end_time": "2026-01-31T23:59:59"
   }
 }

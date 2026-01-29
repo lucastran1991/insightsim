@@ -72,13 +72,21 @@ export interface GenerateStreamEvent {
 /**
  * Generate dummy data (streaming). Backend sends NDJSON: tag_complete per tag, then done or error.
  * @param tag Optional tag name. If provided, only generates data for that tag.
+ * @param start Optional start time (ISO 8601). If provided with end, overrides backend config time range.
+ * @param end Optional end time (ISO 8601). If provided with start, overrides backend config time range.
  * @param onTagComplete Called when the backend finishes generating data for each tag.
  */
 export async function generateDummyData(
   tag?: string,
+  start?: string,
+  end?: string,
   onTagComplete?: (tag: string, records: number) => void
 ): Promise<GenerateResponse> {
-  const body = tag ? JSON.stringify({ tag }) : undefined;
+  const payload: { tag?: string; start?: string; end?: string } = {};
+  if (tag) payload.tag = tag;
+  if (start?.trim()) payload.start = start.trim();
+  if (end?.trim()) payload.end = end.trim();
+  const body = Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined;
 
   const response = await fetch(
     `${API_BASE_URL}${API_ENDPOINTS.generateDummy}`,

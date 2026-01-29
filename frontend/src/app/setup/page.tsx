@@ -22,7 +22,6 @@ import {
   CardBody,
   CardHeader,
   Divider,
-  Select,
 } from '@chakra-ui/react';
 import {
   format,
@@ -144,7 +143,16 @@ export default function SetupPage() {
 
     try {
       const tag = mode === 'single' ? selectedTag[0] : undefined;
-      const result = await generateDummyData(tag, (tagName, records) => {
+      // Always send start/end that match the dropdown so backend never falls back to config
+      const effectiveStart =
+        timeRangePreset === 'custom'
+          ? (fromDate?.trim() || defaultRange.start)
+          : getTimeRangeForPreset(timeRangePreset).start;
+      const effectiveEnd =
+        timeRangePreset === 'custom'
+          ? (toDate?.trim() || defaultRange.end)
+          : getTimeRangeForPreset(timeRangePreset).end;
+      const result = await generateDummyData(tag, effectiveStart, effectiveEnd, (tagName, records) => {
         toast({
           title: 'Tag complete',
           description: `${tagName}: ${records} records generated`,
@@ -191,7 +199,7 @@ export default function SetupPage() {
             Setup
           </Heading>
           <Text mt={1} fontSize="sm" color="gray.600">
-            Generate dummy timeseries data. Time range is set in backend config.
+            Generate dummy timeseries data. Time range is from the dropdown (e.g. Today = from 00:00 to now).
           </Text>
         </Box>
 
@@ -233,11 +241,22 @@ export default function SetupPage() {
                 <FormLabel fontSize="sm" color="gray.600">
                   Time range
                 </FormLabel>
-                <Select
+                <Box
+                  as="select"
                   value={timeRangePreset}
                   onChange={(e) => handleTimeRangePresetChange(e.target.value)}
                   maxW="280px"
                   mb={timeRangePreset === 'custom' ? 3 : 0}
+                  px={3}
+                  py={2}
+                  borderWidth="1px"
+                  borderColor="gray.200"
+                  borderRadius="md"
+                  bg="white"
+                  fontSize="md"
+                  _hover={{ borderColor: 'gray.300' }}
+                  _focus={{ outline: 'none', borderColor: 'blue.500', boxShadow: '0 0 0 1px var(--chakra-colors-blue-500)' }}
+                  cursor="pointer"
                 >
                   <option value="today">Today</option>
                   <option value="weekToDate">Week to date</option>
@@ -246,7 +265,7 @@ export default function SetupPage() {
                   <option value="previous1Year">Previous 1 year</option>
                   <option value="previous2Year">Previous 2 years</option>
                   <option value="custom">Custom</option>
-                </Select>
+                </Box>
                 {timeRangePreset === 'custom' && (
                   <DateRangePicker
                     fromDate={fromDate}
