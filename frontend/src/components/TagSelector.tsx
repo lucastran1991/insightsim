@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import {
   Select,
   FormControl,
@@ -11,8 +12,13 @@ import {
   MenuItemOption,
   MenuOptionGroup,
   Button,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  Icon,
 } from '@chakra-ui/react';
 import { ChevronDownIcon } from '@chakra-ui/icons';
+import { FiSearch } from 'react-icons/fi';
 
 interface TagSelectorProps {
   tags: string[];
@@ -29,11 +35,22 @@ export default function TagSelector({
   isMulti = true,
   placeholder = 'Select tags...',
 }: TagSelectorProps) {
+  const [searchKeyword, setSearchKeyword] = useState('');
+
+  // Filter tags locally based on search keyword (case-insensitive)
+  const filteredTags = useMemo(() => {
+    if (!searchKeyword.trim()) {
+      return tags;
+    }
+    const keyword = searchKeyword.toLowerCase();
+    return tags.filter((tag) => tag.toLowerCase().includes(keyword));
+  }, [tags, searchKeyword]);
+
   if (isMulti) {
     return (
       <FormControl>
         <FormLabel>Tags</FormLabel>
-        <Menu closeOnSelect={false}>
+        <Menu closeOnSelect={false} onClose={() => setSearchKeyword('')}>
           <MenuButton
             as={Button}
             rightIcon={<ChevronDownIcon />}
@@ -46,6 +63,23 @@ export default function TagSelector({
               : `${selectedTags.length} tag(s) selected`}
           </MenuButton>
           <MenuList maxH="300px" overflowY="auto">
+            <Box px={3} pt={2} pb={2} borderBottomWidth="1px" borderColor="gray.200">
+              <InputGroup size="sm">
+                <InputLeftElement pointerEvents="none">
+                  <Icon as={FiSearch} color="gray.400" boxSize={4} />
+                </InputLeftElement>
+                <Input
+                  placeholder="Search tags..."
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  bg="white"
+                  borderColor="gray.200"
+                  _placeholder={{ color: 'gray.500' }}
+                />
+              </InputGroup>
+            </Box>
             <MenuOptionGroup
               type="checkbox"
               value={selectedTags}
@@ -54,11 +88,17 @@ export default function TagSelector({
                 Array.isArray(values) ? values : values ? [values] : []
               )}
             >
-              {tags.map((tag) => (
-                <MenuItemOption key={tag} value={tag}>
-                  {tag}
-                </MenuItemOption>
-              ))}
+              {filteredTags.length > 0 ? (
+                filteredTags.map((tag) => (
+                  <MenuItemOption key={tag} value={tag}>
+                    {tag}
+                  </MenuItemOption>
+                ))
+              ) : (
+                <Box px={3} py={2} color="gray.500" fontSize="sm">
+                  No tags found
+                </Box>
+              )}
             </MenuOptionGroup>
           </MenuList>
         </Menu>
@@ -74,7 +114,7 @@ export default function TagSelector({
         onChange={(e) => onChange(e.target.value ? [e.target.value] : [])}
         placeholder={placeholder}
       >
-        {tags.map((tag) => (
+        {filteredTags.map((tag) => (
           <option key={tag} value={tag}>
             {tag}
           </option>

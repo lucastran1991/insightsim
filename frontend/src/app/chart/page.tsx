@@ -278,7 +278,7 @@ export default function ChartPage() {
               </Flex>
             </CardHeader>
             <CardBody p={0}>
-              <TimeseriesChart data={data} />
+              <TimeseriesChart data={data} disableAnimation={aggregateMode === 'raw'} aggregateMode={aggregateMode} />
             </CardBody>
           </Card>
         )}

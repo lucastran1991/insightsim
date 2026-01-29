@@ -26,23 +26,33 @@ func NewTagsService(db *database.DB) *TagsService {
 	return &TagsService{db: db}
 }
 
-// ListTagsPaginated returns a page of tags from the DB and total count
-func (s *TagsService) ListTagsPaginated(page, limit int) (items []TagInfo, total int, err error) {
-	total, err = s.db.CountTags()
-	if err != nil {
-		return nil, 0, fmt.Errorf("count tags: %w", err)
-	}
+// ListTagsPaginated returns a page of tags from the DB and total count. If search is non-empty, filters by tag name (case-insensitive).
+func (s *TagsService) ListTagsPaginated(page, limit int, search string) (items []TagInfo, total int, err error) {
+	search = strings.TrimSpace(search)
 	if limit <= 0 {
 		limit = 9
 	}
 	if page < 1 {
 		page = 1
 	}
+	if search != "" {
+		total, err = s.db.CountTagsWithSearch(search)
+	} else {
+		total, err = s.db.CountTags()
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("count tags: %w", err)
+	}
 	offset := (page - 1) * limit
 	if offset >= total {
 		return []TagInfo{}, total, nil
 	}
-	rows, err := s.db.ListTagsPaginated(offset, limit)
+	var rows []database.TagRow
+	if search != "" {
+		rows, err = s.db.ListTagsPaginatedWithSearch(offset, limit, search)
+	} else {
+		rows, err = s.db.ListTagsPaginated(offset, limit)
+	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("list tags: %w", err)
 	}

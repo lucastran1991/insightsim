@@ -36,10 +36,11 @@ type TagsNamesResponse struct {
 	Tags []string `json:"tags"`
 }
 
-// HandleGet returns a page of tags (GET /api/tags?page=1&limit=9)
+// HandleGet returns a page of tags (GET /api/tags?page=1&limit=9&q=keyword)
 func (h *TagsHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	search := strings.TrimSpace(r.URL.Query().Get("q"))
 	if page < 1 {
 		page = 1
 	}
@@ -49,7 +50,7 @@ func (h *TagsHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	if limit > 100 {
 		limit = 100
 	}
-	items, total, err := h.tagsService.ListTagsPaginated(page, limit)
+	items, total, err := h.tagsService.ListTagsPaginated(page, limit, search)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)

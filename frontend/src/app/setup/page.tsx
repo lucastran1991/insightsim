@@ -81,7 +81,7 @@ function getTimeRangeForPreset(preset: Exclude<TimeRangePreset, 'custom'>): {
   };
 }
 
-const defaultPreset: TimeRangePreset = 'monthToDate';
+const defaultPreset: TimeRangePreset = 'today';
 const defaultRange = getTimeRangeForPreset(defaultPreset);
 
 export default function SetupPage() {
@@ -184,7 +184,7 @@ export default function SetupPage() {
   };
 
   return (
-    <Container maxW="container.md" py={8} px={{ base: 4, md: 6 }}>
+    <Container maxW="container.xl" py={8} px={{ base: 4, md: 6 }}>
       <VStack spacing={8} align="stretch">
         <Box>
           <Heading size="lg" fontWeight="semibold" color="gray.800">
@@ -216,13 +216,15 @@ export default function SetupPage() {
               </FormControl>
 
               {mode === 'single' && (
-                <TagSelector
-                  tags={tags}
-                  selectedTags={selectedTag}
-                  onChange={setSelectedTag}
-                  isMulti={false}
-                  placeholder="Select a tag..."
-                />
+                <FormControl minW={0}>
+                  <TagSelector
+                    tags={tags}
+                    selectedTags={selectedTag}
+                    onChange={setSelectedTag}
+                    isMulti={false}
+                    placeholder="Select a tag..."
+                  />
+                </FormControl>
               )}
 
               <Divider />

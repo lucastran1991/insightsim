@@ -236,12 +236,16 @@ export async function getTagList(): Promise<string[]> {
  * Get a page of tags with stats from backend (paginated)
  * @param page 1-based page (default 1)
  * @param limit page size (default 9)
+ * @param search optional keyword to filter tags by name (case-insensitive)
  */
 export async function getTagsWithStats(
   page: number = 1,
-  limit: number = 9
+  limit: number = 9,
+  search?: string
 ): Promise<TagsListResponse> {
-  const url = `${API_BASE_URL}${API_ENDPOINTS.tags}?page=${page}&limit=${limit}`;
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (search?.trim()) params.set('q', search.trim());
+  const url = `${API_BASE_URL}${API_ENDPOINTS.tags}?${params.toString()}`;
   const response = await fetch(url);
   if (!response.ok) {
     const err = await response.json().catch(() => ({ error: response.statusText }));

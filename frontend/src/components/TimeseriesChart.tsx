@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -11,12 +12,39 @@ import {
   ResponsiveContainer,
   TooltipProps,
 } from 'recharts';
-import { Box, Text, useToken } from '@chakra-ui/react';
+import { Box, Text, useToken, Alert, AlertIcon } from '@chakra-ui/react';
 import { TimeseriesResponse } from '@/types/api';
 import { format } from 'date-fns';
 
+// Maximum number of data points to render (for performance)
+const MAX_DATA_POINTS = 2000;
+
 interface TimeseriesChartProps {
   data: TimeseriesResponse;
+  /** When true, disables chart animations (e.g. for Raw aggregate mode with large datasets) */
+  disableAnimation?: boolean;
+  /** When 'raw', x-axis shows HH:mm; otherwise shows dd/MM */
+  aggregateMode?: 'raw' | string;
+}
+
+/**
+ * Sample data points to reduce the number of points while preserving visual shape.
+ * Uses uniform sampling (every Nth point) when data exceeds maxPoints.
+ */
+function sampleDataPoints<T>(data: T[], maxPoints: number): T[] {
+  if (data.length <= maxPoints) {
+    return data;
+  }
+  const step = Math.ceil(data.length / maxPoints);
+  const sampled: T[] = [];
+  sampled.push(data[0]);
+  for (let i = step; i < data.length - 1; i += step) {
+    sampled.push(data[i]);
+  }
+  if (data.length > 1) {
+    sampled.push(data[data.length - 1]);
+  }
+  return sampled;
 }
 
 // Format large numbers for Y-axis: 1000 -> 1K, 1300000 -> 1.3M, etc.
@@ -73,13 +101,47 @@ function CustomTooltip({ active, payload, label }: TooltipProps<number, string>)
   );
 }
 
-export default function TimeseriesChart({ data }: TimeseriesChartProps) {
+export default function TimeseriesChart({ data, disableAnimation = false, aggregateMode }: TimeseriesChartProps) {
   const gridColor = useToken('colors', 'gray.200');
   const textColor = useToken('colors', 'gray.600');
   const colors = CHART_COLORS;
 
-  // Transform data for Recharts
-  const chartData: Array<Record<string, any>> = [];
+  // Memoize data transformation for performance
+  const { chartData, isSampled, originalCount } = useMemo(() => {
+    const tags = Object.keys(data.result);
+
+    if (tags.length === 0) {
+      return { chartData: [], isSampled: false, originalCount: 0 };
+    }
+
+    const allTimestamps = new Set<string>();
+    tags.forEach((tag) => {
+      data.result[tag].forEach((point) => {
+        allTimestamps.add(point.timestamp);
+      });
+    });
+
+    const sortedTimestamps = Array.from(allTimestamps).sort();
+    const originalCount = sortedTimestamps.length;
+
+    const sampledTimestamps = sampleDataPoints(sortedTimestamps, MAX_DATA_POINTS);
+    const isSampled = sampledTimestamps.length < sortedTimestamps.length;
+
+    const chartDataArray: Array<Record<string, any>> = [];
+    sampledTimestamps.forEach((timestamp) => {
+      const point: Record<string, any> = {
+        timestamp,
+      };
+      tags.forEach((tag) => {
+        const tagData = data.result[tag].find((p) => p.timestamp === timestamp);
+        point[tag] = tagData ? tagData.value : null;
+      });
+      chartDataArray.push(point);
+    });
+
+    return { chartData: chartDataArray, isSampled, originalCount };
+  }, [data]);
+
   const tags = Object.keys(data.result);
 
   if (tags.length === 0) {
@@ -90,46 +152,44 @@ export default function TimeseriesChart({ data }: TimeseriesChartProps) {
     );
   }
 
-  const allTimestamps = new Set<string>();
-  tags.forEach((tag) => {
-    data.result[tag].forEach((point) => {
-      allTimestamps.add(point.timestamp);
-    });
-  });
-
-  const sortedTimestamps = Array.from(allTimestamps).sort();
-
-  // X-axis format from time span: same day → time only; multi-day → date
-  const firstTs = sortedTimestamps[0] ? new Date(sortedTimestamps[0]).getTime() : 0;
-  const lastTs = sortedTimestamps.length > 0 ? new Date(sortedTimestamps[sortedTimestamps.length - 1]).getTime() : 0;
-  const sameDay = firstTs && lastTs && new Date(firstTs).toDateString() === new Date(lastTs).toDateString();
-  const spanDays = (lastTs - firstTs) / (24 * 60 * 60 * 1000) || 0;
-
+  // X-axis format: Raw mode → HH:mm; other aggregate modes → dd/MM
   const formatXTick = (timestamp: string) => {
     const d = new Date(timestamp);
     if (isNaN(d.getTime())) return timestamp;
-    if (sameDay) return format(d, 'HH:mm');
-    if (spanDays > 31) return format(d, 'MM/dd');
-    return format(d, 'MM/dd HH:mm');
+    if (aggregateMode === 'raw') return format(d, 'HH:mm');
+    return format(d, 'dd/MM');
   };
 
-  sortedTimestamps.forEach((timestamp) => {
-    const point: Record<string, any> = {
-      timestamp,
-    };
-    tags.forEach((tag) => {
-      const tagData = data.result[tag].find((p) => p.timestamp === timestamp);
-      point[tag] = tagData ? tagData.value : null;
-    });
-    chartData.push(point);
-  });
-
   return (
-    <Box width="100%" height="520px" px={6} py={4} bg="gray.50">
-      <ResponsiveContainer width="100%" height="100%">
+    <Box
+      width="100%"
+      height={isSampled ? '600px' : '520px'}
+      px={6}
+      py={4}
+      bg="gray.50"
+      display="flex"
+      flexDirection="column"
+    >
+      {isSampled && (
+        <Alert status="info" mb={4} borderRadius="md" fontSize="sm" flexShrink={0}>
+          <AlertIcon />
+          <Box>
+            <Text fontWeight="medium">
+              Large dataset detected ({originalCount.toLocaleString()} points)
+            </Text>
+            <Text fontSize="xs" mt={1}>
+              Displaying {chartData.length.toLocaleString()} sampled points for better performance.
+              Use aggregation (Daily/Monthly) for smoother visualization.
+            </Text>
+          </Box>
+        </Alert>
+      )}
+      <Box flex={1} minHeight={0}>
+        <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={chartData}
           margin={{ top: 16, right: 24, left: 8, bottom: 16 }}
+          animation={!disableAnimation}
         >
           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
           <XAxis
@@ -170,10 +230,13 @@ export default function TimeseriesChart({ data }: TimeseriesChartProps) {
               activeDot={{ r: 4, strokeWidth: 2 }}
               name={tag}
               connectNulls
+              animation={!disableAnimation}
+              isAnimationActive={!disableAnimation}
             />
           ))}
         </LineChart>
-      </ResponsiveContainer>
+        </ResponsiveContainer>
+      </Box>
     </Box>
   );
 }

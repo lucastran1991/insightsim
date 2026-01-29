@@ -234,6 +234,36 @@ func (db *DB) CountTags() (int, error) {
 	return n, nil
 }
 
+// CountTagsWithSearch returns the number of tags whose name contains the search term (case-insensitive)
+func (db *DB) CountTagsWithSearch(search string) (int, error) {
+	pattern := "%" + search + "%"
+	var n int
+	err := db.conn.QueryRow("SELECT COUNT(*) FROM tags WHERE LOWER(tag) LIKE LOWER(?)", pattern).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count tags with search: %w", err)
+	}
+	return n, nil
+}
+
+// ListTagsPaginatedWithSearch returns a page of tag rows filtered by search term (case-insensitive)
+func (db *DB) ListTagsPaginatedWithSearch(offset, limit int, search string) ([]TagRow, error) {
+	pattern := "%" + search + "%"
+	rows, err := db.conn.Query("SELECT tag, created_at, updated_at, source FROM tags WHERE LOWER(tag) LIKE LOWER(?) ORDER BY tag LIMIT ? OFFSET ?", pattern, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list tags with search: %w", err)
+	}
+	defer rows.Close()
+	var result []TagRow
+	for rows.Next() {
+		var r TagRow
+		if err := rows.Scan(&r.Tag, &r.CreatedAt, &r.UpdatedAt, &r.Source); err != nil {
+			return nil, fmt.Errorf("scan tag row: %w", err)
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
 // ListTagNamesFromTagsTable returns tag names from the tags table (for generator and API)
 func (db *DB) ListTagNamesFromTagsTable() ([]string, error) {
 	rows, err := db.conn.Query("SELECT tag FROM tags ORDER BY tag")

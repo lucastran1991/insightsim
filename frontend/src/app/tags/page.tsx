@@ -13,6 +13,9 @@ import {
   SimpleGrid,
   Flex,
   IconButton,
+  Input,
+  InputGroup,
+  InputLeftElement,
   AlertDialog,
   AlertDialogBody,
   AlertDialogFooter,
@@ -29,12 +32,11 @@ import {
   ModalCloseButton,
   FormControl,
   FormLabel,
-  Input,
   Spinner,
   HStack,
   Icon,
 } from '@chakra-ui/react';
-import { FiTrash2, FiPlus, FiTag, FiCalendar } from 'react-icons/fi';
+import { FiTrash2, FiPlus, FiTag, FiCalendar, FiSearch } from 'react-icons/fi';
 import { getTagsWithStats, deleteTag, createTag } from '@/lib/api';
 import type { TagWithStats } from '@/types/api';
 import { format } from 'date-fns';
@@ -61,16 +63,27 @@ export default function TagsPage() {
   const [newTagName, setNewTagName] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const toast = useToast();
   const deleteDialog = useDisclosure();
   const createModal = useDisclosure();
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
 
+  // Debounce search keyword (300ms) before sending to API
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchKeyword);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchKeyword]);
+
   const fetchTags = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getTagsWithStats(page, PAGE_SIZE);
+      const res = await getTagsWithStats(page, PAGE_SIZE, debouncedSearch.trim() || undefined);
       const items = Array.isArray(res?.items) ? res.items : [];
       const total = typeof res?.total === 'number' ? res.total : 0;
       setTags(items);
@@ -95,7 +108,7 @@ export default function TagsPage() {
 
   useEffect(() => {
     fetchTags();
-  }, [page]);
+  }, [page, debouncedSearch]);
 
   const totalPages = Math.max(1, Math.ceil(totalTags / PAGE_SIZE));
 
@@ -156,6 +169,22 @@ export default function TagsPage() {
         <Button leftIcon={<FiPlus />} colorScheme="blue" size="sm" onClick={createModal.onOpen}>
           Create
         </Button>
+      </Flex>
+
+      <Flex justify="center" mb={6}>
+        <InputGroup maxW="400px" size="md">
+          <InputLeftElement pointerEvents="none">
+            <Icon as={FiSearch} color="gray.400" />
+          </InputLeftElement>
+          <Input
+            placeholder="Search tags by name..."
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            bg="white"
+            borderColor="gray.200"
+            _placeholder={{ color: 'gray.500' }}
+          />
+        </InputGroup>
       </Flex>
 
       {loading ? (

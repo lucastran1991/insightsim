@@ -157,7 +157,7 @@ export default function UploadPage() {
   const fileSizeKb = file ? (file.size / 1024).toFixed(1) : '';
 
   return (
-    <Container maxW="container.md" py={8} px={{ base: 4, md: 6 }}>
+    <Container maxW="container.xl" py={8} px={{ base: 4, md: 6 }}>
       <VStack spacing={8} align="stretch">
         <Card shadow="md" borderRadius="xl" borderWidth="1px" borderColor="gray.200" overflow="hidden">
           <CardHeader bg="gray.50" borderBottomWidth="1px" borderColor="gray.100" py={5}>
