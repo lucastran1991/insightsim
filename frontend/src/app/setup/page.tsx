@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
 import {
   Container,
   Box,
@@ -244,7 +244,7 @@ export default function SetupPage() {
                 <Box
                   as="select"
                   value={timeRangePreset}
-                  onChange={(e) => handleTimeRangePresetChange(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => handleTimeRangePresetChange(e.target.value)}
                   maxW="280px"
                   mb={timeRangePreset === 'custom' ? 3 : 0}
                   px={3}
