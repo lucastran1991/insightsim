@@ -48,6 +48,7 @@ func main() {
 	loader := services.NewLoader(db)
 	queryService := services.NewQueryService(db)
 	generator := services.NewGenerator(db)
+	uploadService := services.NewUploadService(db)
 
 	// Get value range from config (with defaults)
 	minValue := 1.0
@@ -74,6 +75,7 @@ func main() {
 	loadHandler := handlers.NewLoadHandler(loader, cfg.Data.RawDataFolder)
 	queryHandler := handlers.NewQueryHandler(queryService)
 	generatorHandler := handlers.NewGeneratorHandler(generator, cfg.Data.TagListFile, minValue, maxValue, useSequential, startTime, endTime)
+	uploadHandler := handlers.NewUploadHandler(uploadService)
 
 	// Setup router
 	router := mux.NewRouter()
@@ -82,6 +84,7 @@ func main() {
 	api := router.PathPrefix("/api").Subrouter()
 	api.HandleFunc("/load", loadHandler.Handle).Methods("POST")
 	api.HandleFunc("/generate-dummy", generatorHandler.Handle).Methods("POST")
+	api.HandleFunc("/upload-csv", uploadHandler.Handle).Methods("POST")
 	// Handle timeseriesdata with flexible path matching
 	api.PathPrefix("/timeseriesdata/").HandlerFunc(queryHandler.Handle).Methods("GET")
 
@@ -91,16 +94,31 @@ func main() {
 		fmt.Fprintf(w, "OK")
 	}).Methods("GET")
 
-	// Start server
+	// CORS middleware: allow all origins in dev
+	corsMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	// Start server with CORS wrapper
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("Server starting on %s", addr)
 	log.Printf("API endpoints:")
 	log.Printf("  POST /api/load")
 	log.Printf("  POST /api/generate-dummy")
+	log.Printf("  POST /api/upload-csv")
 	log.Printf("  GET  /api/timeseriesdata/{start}/{end}?tags=<tag1,tag2>")
 	log.Printf("  GET  /health")
 
-	if err := http.ListenAndServe(addr, router); err != nil {
+	if err := http.ListenAndServe(addr, corsMiddleware(router)); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }

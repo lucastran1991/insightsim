@@ -27,3 +27,10 @@ export interface LoadResponse {
 export interface HealthResponse {
   status: string;
 }
+
+export interface UploadCsvResponse {
+  success: boolean;
+  message: string;
+  count?: number;
+  tags_affected?: number;
+}

@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Container, Spinner, VStack, Heading, Text } from '@chakra-ui/react';
+import { Container, Spinner, VStack, Text } from '@chakra-ui/react';
 
 export default function HomePage() {
   const router = useRouter();
@@ -16,8 +16,7 @@ export default function HomePage() {
     <Container maxW="container.md" py={20}>
       <VStack spacing={4}>
         <Spinner size="xl" />
-        <Heading size="md">Loading...</Heading>
-        <Text color="gray.600">Redirecting to chart page...</Text>
+        <Text color="gray.600">Redirecting...</Text>
       </VStack>
     </Container>
   );

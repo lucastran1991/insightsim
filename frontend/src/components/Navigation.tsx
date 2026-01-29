@@ -19,6 +19,7 @@ export default function Navigation() {
   const navItems = [
     { href: '/chart', label: 'Chart' },
     { href: '/setup', label: 'Setup' },
+    { href: '/upload', label: 'Upload' },
   ];
 
   return (

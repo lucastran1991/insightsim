@@ -24,9 +24,13 @@ func NewGenerator(db *database.DB) *Generator {
 	return &Generator{db: db}
 }
 
+// OnTagComplete is called after each tag's data generation finishes (optional, may be nil).
+type OnTagComplete func(tag string, records int)
+
 // GenerateDummyData generates dummy data for tags from tag_list.json
-// If singleTag is provided, only generate for that tag; otherwise generate for all tags
-func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue float64, useSequential bool, startTimeStr, endTimeStr string, singleTag string) (int, int, error) {
+// If singleTag is provided, only generate for that tag; otherwise generate for all tags.
+// If onTagComplete is non-nil, it is called after each tag completes with the tag name and record count.
+func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue float64, useSequential bool, startTimeStr, endTimeStr string, singleTag string, onTagComplete OnTagComplete) (int, int, error) {
 	generateStartTime := time.Now()
 
 	// Read tag_list.json from config
@@ -78,7 +82,7 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 
 	// Parse time range from config
 	timeFormat := "2006-01-02T15:04:05"
-	
+
 	// Set defaults if empty
 	if startTimeStr == "" {
 		startTimeStr = "2025-12-01T00:00:00"
@@ -86,19 +90,19 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 	if endTimeStr == "" {
 		endTimeStr = "2026-01-31T23:59:59"
 	}
-	
+
 	startTime, err := time.Parse(timeFormat, startTimeStr)
 	if err != nil {
 		return 0, 0, fmt.Errorf("invalid generation_start_time format '%s': %w (expected format: %s)", startTimeStr, err, timeFormat)
 	}
 	startTime = startTime.UTC()
-	
+
 	endTime, err := time.Parse(timeFormat, endTimeStr)
 	if err != nil {
 		return 0, 0, fmt.Errorf("invalid generation_end_time format '%s': %w (expected format: %s)", endTimeStr, err, timeFormat)
 	}
 	endTime = endTime.UTC()
-	
+
 	// Validate that start time is before end time
 	if startTime.After(endTime) || startTime.Equal(endTime) {
 		return 0, 0, fmt.Errorf("invalid time range: generation_start_time (%s) must be before generation_end_time (%s)", startTimeStr, endTimeStr)
@@ -235,7 +239,7 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 					if wasClamped {
 						clampInfo = fmt.Sprintf(" [CLAMPED: %.2f -> %.2f]", originalValue, newValue)
 					}
-					fmt.Printf("[GENERATE] INSERT tag=%s timestamp=%s value=%.2f quality=%d%s\n",
+					// fmt.Printf("[GENERATE] INSERT tag=%s timestamp=%s value=%.2f quality=%d%s\n",
 						tag, currentTime.Format("2006-01-02T15:04:05"), newValue, quality, clampInfo)
 				} else {
 					return 0, 0, fmt.Errorf("failed to check existing record: %w", err)
@@ -314,6 +318,9 @@ func (g *Generator) GenerateDummyData(tagListFile string, minValue, maxValue flo
 		// Log completion for each tag
 		tagDuration := time.Since(tagStartTime)
 		fmt.Printf("[GENERATE] Completed tag: %s (%d records, took %v)\n", tag, tagRecords, tagDuration.Round(time.Millisecond))
+		if onTagComplete != nil {
+			onTagComplete(tag, tagRecords)
+		}
 	}
 
 	// Final commit

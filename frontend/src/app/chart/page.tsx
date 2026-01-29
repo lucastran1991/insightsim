@@ -5,24 +5,83 @@ import {
   Container,
   Box,
   Heading,
+  Text,
   VStack,
-  HStack,
+  Flex,
   Spinner,
   Alert,
   AlertIcon,
   AlertTitle,
   AlertDescription,
   useToast,
+  Card,
+  CardBody,
+  CardHeader,
+  SimpleGrid,
+  FormControl,
+  FormLabel,
+  Select,
+  Button,
 } from '@chakra-ui/react';
-import { format, subDays, startOfToday, endOfToday } from 'date-fns';
+import {
+  format,
+  startOfToday,
+  startOfWeek,
+  startOfMonth,
+  startOfYear,
+  subYears,
+} from 'date-fns';
 import TimeModeSelector, { TimeMode } from '@/components/TimeModeSelector';
 import TagSelector from '@/components/TagSelector';
 import TimeseriesChart from '@/components/TimeseriesChart';
-import { getTimeseriesData, getTagList } from '@/lib/api';
+import { getTimeseriesData, getTagList, type AggregateMode } from '@/lib/api';
 import { TimeseriesResponse } from '@/types/api';
 
+function escapeCsvField(field: string): string {
+  if (/[",\n\r]/.test(field)) {
+    return `"${field.replace(/"/g, '""')}"`;
+  }
+  return field;
+}
+
+function dataToCsv(data: TimeseriesResponse): string {
+  const tags = Object.keys(data.result);
+  if (tags.length === 0) return 'timestamp\n';
+
+  const allTimestamps = new Set<string>();
+  tags.forEach((tag) => {
+    data.result[tag].forEach((point) => allTimestamps.add(point.timestamp));
+  });
+  const sortedTimestamps = Array.from(allTimestamps).sort();
+
+  const header = ['timestamp', ...tags].map(escapeCsvField).join(',');
+  const rows = sortedTimestamps.map((timestamp) => {
+    const values = [
+      escapeCsvField(timestamp),
+      ...tags.map((tag) => {
+        const point = data.result[tag].find((p) => p.timestamp === timestamp);
+        return point != null ? String(point.value) : '';
+      }),
+    ];
+    return values.join(',');
+  });
+  return [header, ...rows].join('\n');
+}
+
+function downloadCsv(data: TimeseriesResponse) {
+  const csv = dataToCsv(data);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `timeseries-${format(new Date(), 'yyyy-MM-dd-HHmm')}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ChartPage() {
-  const [timeMode, setTimeMode] = useState<TimeMode>('1day');
+  const [timeMode, setTimeMode] = useState<TimeMode>('monthToDate');
+  const [aggregateMode, setAggregateMode] = useState<AggregateMode>('daily');
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [data, setData] = useState<TimeseriesResponse | null>(null);
@@ -54,21 +113,29 @@ export default function ChartPage() {
     loadTags();
   }, []);
 
-  // Calculate time range based on mode
+  // Calculate time range based on datetime filter (start of period to now)
   const getTimeRange = (mode: TimeMode): { start: string; end: string } => {
     const now = new Date();
     let start: Date;
-    let end: Date = endOfToday();
 
     switch (mode) {
-      case '1day':
+      case 'today':
         start = startOfToday();
         break;
-      case '1week':
-        start = subDays(now, 7);
+      case 'weekToDate':
+        start = startOfWeek(now, { weekStartsOn: 1 }); // Monday
         break;
-      case '1month':
-        start = subDays(now, 30);
+      case 'monthToDate':
+        start = startOfMonth(now);
+        break;
+      case 'yearToDate':
+        start = startOfYear(now);
+        break;
+      case 'previous1Year':
+        start = subYears(now, 1);
+        break;
+      case 'previous2Year':
+        start = subYears(now, 2);
         break;
       default:
         start = startOfToday();
@@ -76,7 +143,7 @@ export default function ChartPage() {
 
     return {
       start: format(start, "yyyy-MM-dd'T'HH:mm:ss"),
-      end: format(end, "yyyy-MM-dd'T'HH:mm:ss"),
+      end: format(now, "yyyy-MM-dd'T'HH:mm:ss"),
     };
   };
 
@@ -93,7 +160,7 @@ export default function ChartPage() {
 
       try {
         const { start, end } = getTimeRange(timeMode);
-        const result = await getTimeseriesData(start, end, selectedTags);
+        const result = await getTimeseriesData(start, end, selectedTags, aggregateMode);
         setData(result);
       } catch (err) {
         const errorMessage =
@@ -112,37 +179,78 @@ export default function ChartPage() {
     }
 
     fetchData();
-  }, [timeMode, selectedTags, toast]);
+  }, [timeMode, selectedTags, aggregateMode, toast]);
 
   return (
-    <Container maxW="container.xl" py={8}>
-      <VStack spacing={6} align="stretch">
-        <Heading size="lg">Timeseries Data Chart</Heading>
+    <Container maxW="container.xl" py={8} px={{ base: 4, md: 6 }}>
+      <VStack spacing={8} align="stretch">
+        <Box>
+          <Heading size="lg" fontWeight="semibold" color="gray.800">
+            Chart
+          </Heading>
+          <Text mt={1} fontSize="sm" color="gray.600">
+            View and download timeseries data by tags and time range.
+          </Text>
+        </Box>
 
-        <HStack spacing={4} align="start">
-          <Box>
-            <TimeModeSelector value={timeMode} onChange={setTimeMode} />
-          </Box>
-          <Box flex={1}>
-            <TagSelector
-              tags={tags}
-              selectedTags={selectedTags}
-              onChange={setSelectedTags}
-              isMulti={true}
-            />
-          </Box>
-        </HStack>
+        <Card shadow="sm" borderRadius="lg" borderWidth="1px" borderColor="gray.100">
+          <CardHeader pb={2}>
+            <Heading size="sm" fontWeight="medium" color="gray.600">
+              Filters
+            </Heading>
+          </CardHeader>
+          <CardBody pt={0}>
+            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} alignItems="flex-end">
+              <FormControl>
+                <TagSelector
+                  tags={tags}
+                  selectedTags={selectedTags}
+                  onChange={setSelectedTags}
+                  isMulti={true}
+                />
+              </FormControl>
+              <FormControl maxW={{ md: '200px' }}>
+                <FormLabel fontSize="sm" color="gray.600">
+                  Aggregate
+                </FormLabel>
+                <Select
+                  value={aggregateMode}
+                  onChange={(e) => setAggregateMode(e.target.value as AggregateMode)}
+                >
+                  <option value="raw">Raw</option>
+                  <option value="daily">Daily</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="yearly">Yearly</option>
+                </Select>
+              </FormControl>
+              <FormControl maxW={{ md: '220px' }}>
+                <FormLabel fontSize="sm" color="gray.600">
+                  Time range
+                </FormLabel>
+                <TimeModeSelector value={timeMode} onChange={setTimeMode} />
+              </FormControl>
+            </SimpleGrid>
+          </CardBody>
+        </Card>
 
         {loading && (
-          <Box textAlign="center" py={8}>
-            <Spinner size="xl" />
-          </Box>
+          <Card shadow="sm" borderRadius="lg" overflow="hidden">
+            <CardBody py={16}>
+              <Flex justify="center" align="center" direction="column" gap={4}>
+                <Spinner size="xl" color="blue.500" thickness="3px" />
+                <Box as="span" fontSize="sm" color="gray.500">
+                  Loading chart data...
+                </Box>
+              </Flex>
+            </CardBody>
+          </Card>
         )}
 
         {error && (
-          <Alert status="error">
+          <Alert status="error" borderRadius="lg" variant="left-accent">
             <AlertIcon />
-            <Box>
+            <Box flex={1}>
               <AlertTitle>Error loading data</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Box>
@@ -150,20 +258,37 @@ export default function ChartPage() {
         )}
 
         {!loading && !error && data && (
-          <Box>
-            <TimeseriesChart data={data} />
-          </Box>
+          <Card shadow="sm" borderRadius="lg" borderWidth="1px" borderColor="gray.100" overflow="hidden">
+            <CardHeader py={4} borderBottomWidth="1px" borderColor="gray.100">
+              <Flex justify="space-between" align="center" wrap="wrap" gap={2}>
+                <Heading size="sm" fontWeight="medium" color="gray.700">
+                  Chart
+                </Heading>
+                <Button
+                  size="sm"
+                  colorScheme="blue"
+                  variant="outline"
+                  onClick={() => downloadCsv(data)}
+                >
+                  Download CSV
+                </Button>
+              </Flex>
+            </CardHeader>
+            <CardBody p={0}>
+              <TimeseriesChart data={data} />
+            </CardBody>
+          </Card>
         )}
 
         {!loading && !error && !data && selectedTags.length > 0 && (
-          <Alert status="info">
+          <Alert status="info" borderRadius="lg" variant="left-accent">
             <AlertIcon />
             <AlertDescription>No data available for selected tags</AlertDescription>
           </Alert>
         )}
 
         {!loading && !error && selectedTags.length === 0 && (
-          <Alert status="warning">
+          <Alert status="warning" borderRadius="lg" variant="left-accent">
             <AlertIcon />
             <AlertDescription>Please select at least one tag to view data</AlertDescription>
           </Alert>

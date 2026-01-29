@@ -64,15 +64,22 @@ func (h *QueryHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse aggregate query parameter (raw, daily, monthly, quarterly, yearly)
+	aggregate := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("aggregate")))
+	allowedAggregate := map[string]bool{"raw": true, "daily": true, "monthly": true, "quarterly": true, "yearly": true}
+	if aggregate == "" || !allowedAggregate[aggregate] {
+		aggregate = "raw"
+	}
+
 	// Log request
 	tagsInfo := "all tags"
 	if len(tags) > 0 {
 		tagsInfo = fmt.Sprintf("%d tag(s)", len(tags))
 	}
-	fmt.Printf("[API] GET /api/timeseriesdata - Query: %s to %s, tags: %s\n", startTime, endTime, tagsInfo)
-	
+	fmt.Printf("[API] GET /api/timeseriesdata - Query: %s to %s, tags: %s, aggregate: %s\n", startTime, endTime, tagsInfo, aggregate)
+
 	// Query the data
-	result, err := h.queryService.QueryTimeseriesData(startTime, endTime, tags)
+	result, err := h.queryService.QueryTimeseriesData(startTime, endTime, tags, aggregate)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)

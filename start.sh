@@ -334,7 +334,7 @@ fi
 
 # Also check for processes running on the backend port and kill them
 if command -v lsof &> /dev/null; then
-    BACKEND_PID=$(lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null)
+    BACKEND_PID=$(lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null) || true
     if [ -n "$BACKEND_PID" ]; then
         log_warn "Found process $BACKEND_PID running on backend port $PORT"
         log_info "Killing process $BACKEND_PID..."
@@ -342,7 +342,7 @@ if command -v lsof &> /dev/null; then
         sleep 1
     fi
 elif command -v netstat &> /dev/null; then
-    BACKEND_PID=$(netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1)
+    BACKEND_PID=$(netstat -tlnp 2>/dev/null | grep ":$PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1) || true
     if [ -n "$BACKEND_PID" ] && [ "$BACKEND_PID" != "-" ]; then
         log_warn "Found process $BACKEND_PID running on backend port $PORT"
         log_info "Killing process $BACKEND_PID..."
@@ -354,7 +354,7 @@ fi
 # Check for frontend process on port 8086 (default Next.js port)
 FRONTEND_PORT=8086
 if command -v lsof &> /dev/null; then
-    FRONTEND_PID=$(lsof -Pi :$FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null)
+    FRONTEND_PID=$(lsof -Pi :$FRONTEND_PORT -sTCP:LISTEN -t 2>/dev/null) || true
     if [ -n "$FRONTEND_PID" ]; then
         log_warn "Found process $FRONTEND_PID running on frontend port $FRONTEND_PORT"
         log_info "Killing process $FRONTEND_PID..."
@@ -362,7 +362,7 @@ if command -v lsof &> /dev/null; then
         sleep 1
     fi
 elif command -v netstat &> /dev/null; then
-    FRONTEND_PID=$(netstat -tlnp 2>/dev/null | grep ":$FRONTEND_PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1)
+    FRONTEND_PID=$(netstat -tlnp 2>/dev/null | grep ":$FRONTEND_PORT " | awk '{print $7}' | cut -d'/' -f1 | head -1) || true
     if [ -n "$FRONTEND_PID" ] && [ "$FRONTEND_PID" != "-" ]; then
         log_warn "Found process $FRONTEND_PID running on frontend port $FRONTEND_PORT"
         log_info "Killing process $FRONTEND_PID..."

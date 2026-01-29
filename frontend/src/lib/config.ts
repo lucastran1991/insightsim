@@ -9,4 +9,5 @@ export const API_ENDPOINTS = {
   load: '/api/load',
   generateDummy: '/api/generate-dummy',
   timeseriesData: '/api/timeseriesdata',
+  uploadCsv: '/api/upload-csv',
 } as const;

@@ -2,7 +2,13 @@
 
 import { Select } from '@chakra-ui/react';
 
-export type TimeMode = '1day' | '1week' | '1month';
+export type TimeMode =
+  | 'today'
+  | 'weekToDate'
+  | 'monthToDate'
+  | 'yearToDate'
+  | 'previous1Year'
+  | 'previous2Year';
 
 interface TimeModeSelectorProps {
   value: TimeMode;
@@ -19,9 +25,12 @@ export default function TimeModeSelector({
       onChange={(e) => onChange(e.target.value as TimeMode)}
       maxW="200px"
     >
-      <option value="1day">1 Day</option>
-      <option value="1week">1 Week</option>
-      <option value="1month">1 Month</option>
+      <option value="today">Today</option>
+      <option value="weekToDate">Week to date</option>
+      <option value="monthToDate">Month to date</option>
+      <option value="yearToDate">Year to date</option>
+      <option value="previous1Year">Previous 1 year</option>
+      <option value="previous2Year">Previous 2 years</option>
     </Select>
   );
 }

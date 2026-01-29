@@ -4,9 +4,15 @@ import {
   Select,
   FormControl,
   FormLabel,
-  Text,
   Box,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItemOption,
+  MenuOptionGroup,
+  Button,
 } from '@chakra-ui/react';
+import { ChevronDownIcon } from '@chakra-ui/icons';
 
 interface TagSelectorProps {
   tags: string[];
@@ -27,42 +33,35 @@ export default function TagSelector({
     return (
       <FormControl>
         <FormLabel>Tags</FormLabel>
-        <Box>
-          <Box
-            as="select"
-            multiple
-            value={selectedTags}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-              const selected = Array.from(
-                e.target.selectedOptions,
-                (option) => option.value
-              );
-              onChange(selected);
-            }}
+        <Menu closeOnSelect={false}>
+          <MenuButton
+            as={Button}
+            rightIcon={<ChevronDownIcon />}
             width="100%"
-            minHeight="200px"
-            padding={2}
-            border="1px"
-            borderColor="gray.300"
-            borderRadius="md"
-            fontSize="md"
-            _focus={{
-              borderColor: 'blue.500',
-              boxShadow: '0 0 0 1px blue.500',
-            }}
+            textAlign="left"
+            fontWeight="normal"
           >
-            {tags.map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </Box>
-          {selectedTags.length > 0 && (
-            <Text mt={2} fontSize="sm" color="gray.600">
-              {selectedTags.length} tag(s) selected
-            </Text>
-          )}
-        </Box>
+            {selectedTags.length === 0
+              ? placeholder
+              : `${selectedTags.length} tag(s) selected`}
+          </MenuButton>
+          <MenuList maxH="300px" overflowY="auto">
+            <MenuOptionGroup
+              type="checkbox"
+              value={selectedTags}
+              onChange={(values) =>
+              onChange(
+                Array.isArray(values) ? values : values ? [values] : []
+              )}
+            >
+              {tags.map((tag) => (
+                <MenuItemOption key={tag} value={tag}>
+                  {tag}
+                </MenuItemOption>
+              ))}
+            </MenuOptionGroup>
+          </MenuList>
+        </Menu>
       </FormControl>
     );
   }

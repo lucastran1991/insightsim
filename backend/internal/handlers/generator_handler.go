@@ -8,15 +8,25 @@ import (
 	"insightsim/internal/services"
 )
 
+// Stream event types for NDJSON response
+type streamEvent struct {
+	Event     string `json:"event"`
+	Tag       string `json:"tag,omitempty"`
+	Records   int    `json:"records,omitempty"`
+	Count     int    `json:"count,omitempty"`
+	TagsCount int    `json:"tags_count,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
 // GeneratorHandler handles POST /api/generate-dummy requests
 type GeneratorHandler struct {
-	generator       *services.Generator
-	tagListFile     string
-	minValue        float64
-	maxValue        float64
-	useSequential   bool
-	startTime       string
-	endTime         string
+	generator     *services.Generator
+	tagListFile   string
+	minValue      float64
+	maxValue      float64
+	useSequential bool
+	startTime     string
+	endTime       string
 }
 
 // NewGeneratorHandler creates a new GeneratorHandler instance
@@ -39,10 +49,10 @@ type GenerateRequest struct {
 
 // GenerateResponse represents the response from generate-dummy endpoint
 type GenerateResponse struct {
-	Success    bool   `json:"success"`
-	Message    string `json:"message"`
-	Count      int    `json:"count,omitempty"`
-	TagsCount  int    `json:"tags_count,omitempty"`
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	Count     int    `json:"count,omitempty"`
+	TagsCount int    `json:"tags_count,omitempty"`
 }
 
 // Handle handles the generate-dummy request
@@ -72,22 +82,29 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("[API] POST /api/generate-dummy - Starting generation for %s (value range: %.2f-%.2f, mode: %s, time range: %s to %s)\n",
 		tagInfo, h.minValue, h.maxValue, mode, h.startTime, h.endTime)
 
-	count, tagsCount, err := h.generator.GenerateDummyData(h.tagListFile, h.minValue, h.maxValue, h.useSequential, h.startTime, h.endTime, req.Tag)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(GenerateResponse{
-			Success: false,
-			Message: err.Error(),
-		})
-		return
+	// Stream NDJSON: set headers and prepare flusher
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.WriteHeader(http.StatusOK)
+	var flusher http.Flusher
+	if f, ok := w.(http.Flusher); ok {
+		flusher = f
+	}
+	writeEvent := func(ev streamEvent) {
+		data, _ := json.Marshal(ev)
+		w.Write(append(data, '\n'))
+		if flusher != nil {
+			flusher.Flush()
+		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(GenerateResponse{
-		Success:   true,
-		Message:   "Dummy data generated successfully",
-		Count:     count,
-		TagsCount: tagsCount,
-	})
+	onTagComplete := func(tag string, records int) {
+		writeEvent(streamEvent{Event: "tag_complete", Tag: tag, Records: records})
+	}
+
+	count, tagsCount, err := h.generator.GenerateDummyData(h.tagListFile, h.minValue, h.maxValue, h.useSequential, h.startTime, h.endTime, req.Tag, onTagComplete)
+	if err != nil {
+		writeEvent(streamEvent{Event: "error", Message: err.Error()})
+		return
+	}
+	writeEvent(streamEvent{Event: "done", Count: count, TagsCount: tagsCount})
 }

@@ -3,6 +3,7 @@ import {
   GenerateResponse,
   LoadResponse,
   HealthResponse,
+  UploadCsvResponse,
 } from '@/types/api';
 import { API_BASE_URL, API_ENDPOINTS } from './config';
 
@@ -18,16 +19,20 @@ export async function getHealthCheck(): Promise<HealthResponse> {
   return { status: text };
 }
 
+export type AggregateMode = 'raw' | 'daily' | 'monthly' | 'quarterly' | 'yearly';
+
 /**
  * Query timeseries data
  * @param start Start timestamp in ISO 8601 format (e.g., "2025-12-01T00:00:00")
  * @param end End timestamp in ISO 8601 format (e.g., "2025-12-01T23:59:59")
  * @param tags Optional array of tag names to filter
+ * @param aggregate Optional aggregation: raw, daily, monthly, quarterly, yearly
  */
 export async function getTimeseriesData(
   start: string,
   end: string,
-  tags?: string[]
+  tags?: string[],
+  aggregate?: AggregateMode
 ): Promise<TimeseriesResponse> {
   const url = new URL(
     `${API_BASE_URL}${API_ENDPOINTS.timeseriesData}/${start}/${end}`
@@ -35,6 +40,9 @@ export async function getTimeseriesData(
 
   if (tags && tags.length > 0) {
     url.searchParams.set('tags', tags.join(','));
+  }
+  if (aggregate && aggregate !== 'raw') {
+    url.searchParams.set('aggregate', aggregate);
   }
 
   const response = await fetch(url.toString());
@@ -49,12 +57,24 @@ export async function getTimeseriesData(
   return response.json();
 }
 
+/** Stream event from backend generate-dummy NDJSON response */
+export interface GenerateStreamEvent {
+  event: 'tag_complete' | 'done' | 'error';
+  tag?: string;
+  records?: number;
+  count?: number;
+  tags_count?: number;
+  message?: string;
+}
+
 /**
- * Generate dummy data
+ * Generate dummy data (streaming). Backend sends NDJSON: tag_complete per tag, then done or error.
  * @param tag Optional tag name. If provided, only generates data for that tag.
+ * @param onTagComplete Called when the backend finishes generating data for each tag.
  */
 export async function generateDummyData(
-  tag?: string
+  tag?: string,
+  onTagComplete?: (tag: string, records: number) => void
 ): Promise<GenerateResponse> {
   const body = tag ? JSON.stringify({ tag }) : undefined;
 
@@ -76,7 +96,67 @@ export async function generateDummyData(
     throw new Error(error.message || 'Failed to generate dummy data');
   }
 
-  return response.json();
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('No response body');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result: GenerateResponse | null = null;
+  let streamError: Error | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const ev = JSON.parse(trimmed) as GenerateStreamEvent;
+        if (ev.event === 'tag_complete' && ev.tag != null && ev.records != null) {
+          onTagComplete?.(ev.tag, ev.records);
+        } else if (ev.event === 'done') {
+          result = {
+            success: true,
+            message: 'Dummy data generated successfully',
+            count: ev.count,
+            tags_count: ev.tags_count,
+          };
+        } else if (ev.event === 'error') {
+          streamError = new Error(ev.message ?? 'Generation failed');
+        }
+      } catch {
+        // ignore non-JSON lines
+      }
+    }
+  }
+  if (buffer.trim()) {
+    try {
+      const ev = JSON.parse(buffer.trim()) as GenerateStreamEvent;
+      if (ev.event === 'tag_complete' && ev.tag != null && ev.records != null) {
+        onTagComplete?.(ev.tag, ev.records);
+      } else if (ev.event === 'done') {
+        result = {
+          success: true,
+          message: 'Dummy data generated successfully',
+          count: ev.count,
+          tags_count: ev.tags_count,
+        };
+      } else if (ev.event === 'error') {
+        streamError = new Error(ev.message ?? 'Generation failed');
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (streamError) throw streamError;
+  if (result) return result;
+  throw new Error('No done or error event in stream');
 }
 
 /**
@@ -98,6 +178,36 @@ export async function loadData(): Promise<LoadResponse> {
   }
 
   return response.json();
+}
+
+/**
+ * Upload CSV to override or replace tag data.
+ * @param file CSV file (header: timestamp, tag1, tag2, ...)
+ * @param mode override = upsert within CSV timestamps; replace = delete all data for tags in CSV then insert CSV rows
+ */
+export async function uploadCsv(
+  file: File,
+  mode: 'override' | 'replace'
+): Promise<UploadCsvResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('mode', mode);
+
+  const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.uploadCsv}`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const data: UploadCsvResponse = await response.json().catch(() => ({
+    success: false,
+    message: `HTTP ${response.status}: ${response.statusText}`,
+  }));
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to upload CSV');
+  }
+
+  return data;
 }
 
 /**
