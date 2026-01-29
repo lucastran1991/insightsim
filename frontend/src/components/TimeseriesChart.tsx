@@ -189,7 +189,6 @@ export default function TimeseriesChart({ data, disableAnimation = false, aggreg
         <LineChart
           data={chartData}
           margin={{ top: 16, right: 24, left: 8, bottom: 16 }}
-          animation={!disableAnimation}
         >
           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
           <XAxis
@@ -230,7 +229,6 @@ export default function TimeseriesChart({ data, disableAnimation = false, aggreg
               activeDot={{ r: 4, strokeWidth: 2 }}
               name={tag}
               connectNulls
-              animation={!disableAnimation}
               isAnimationActive={!disableAnimation}
             />
           ))}
