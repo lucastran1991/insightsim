@@ -96,23 +96,36 @@ export type GenerateFrequency = '1min' | '5min' | '15min' | '30min' | '1hour';
  * @param end Optional end time (ISO 8601). If provided with start, overrides backend config time range.
  * @param frequencyOrOnTagComplete Optional frequency (1 record per N minutes) or callback for backward compatibility.
  * @param onTagComplete Called when the backend finishes generating data for each tag.
+ * @param minValue Optional min value for generated points (falls back to backend config if omitted).
+ * @param maxValue Optional max value for generated points (falls back to backend config if omitted).
  */
 export async function generateDummyData(
   tag?: string,
   start?: string,
   end?: string,
   frequencyOrOnTagComplete?: GenerateFrequency | ((tag: string, records: number) => void),
-  onTagComplete?: (tag: string, records: number) => void
+  onTagComplete?: (tag: string, records: number) => void,
+  minValue?: number,
+  maxValue?: number
 ): Promise<GenerateResponse> {
   const frequency =
     typeof frequencyOrOnTagComplete === 'string' ? frequencyOrOnTagComplete : undefined;
   const cb = typeof frequencyOrOnTagComplete === 'function' ? frequencyOrOnTagComplete : onTagComplete;
 
-  const payload: { tag?: string; start?: string; end?: string; frequency?: string } = {};
+  const payload: {
+    tag?: string;
+    start?: string;
+    end?: string;
+    frequency?: string;
+    minValue?: number;
+    maxValue?: number;
+  } = {};
   if (tag) payload.tag = tag;
   if (start?.trim()) payload.start = start.trim();
   if (end?.trim()) payload.end = end.trim();
   if (frequency) payload.frequency = frequency;
+  if (minValue != null && !Number.isNaN(minValue)) payload.minValue = minValue;
+  if (maxValue != null && !Number.isNaN(maxValue)) payload.maxValue = maxValue;
   const body = Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined;
 
   const response = await fetch(

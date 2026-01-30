@@ -22,6 +22,8 @@ import {
   CardBody,
   CardHeader,
   Divider,
+  Input,
+  SimpleGrid,
 } from '@chakra-ui/react';
 import {
   format,
@@ -33,7 +35,7 @@ import {
 } from 'date-fns';
 import TagSelector from '@/components/TagSelector';
 import DateRangePicker from '@/components/DateRangePicker';
-import { generateDummyData, getTagList, type GenerateFrequency } from '@/lib/api';
+import { generateDummyData, getTagList, getValueRangeConfig, type GenerateFrequency } from '@/lib/api';
 
 type GenerationMode = 'all' | 'single';
 
@@ -91,6 +93,8 @@ export default function SetupPage() {
   const [fromDate, setFromDate] = useState<string>(defaultRange.start);
   const [toDate, setToDate] = useState<string>(defaultRange.end);
   const [frequency, setFrequency] = useState<GenerateFrequency>('1min');
+  const [minValue, setMinValue] = useState<number>(0);
+  const [maxValue, setMaxValue] = useState<number>(10000);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -115,6 +119,14 @@ export default function SetupPage() {
     }
     loadTags();
   }, [toast]);
+
+  // Load value range defaults from config
+  useEffect(() => {
+    getValueRangeConfig().then(({ min, max }) => {
+      setMinValue(min);
+      setMaxValue(max);
+    });
+  }, []);
 
   const handleTimeRangePresetChange = (value: string) => {
     const preset = value as TimeRangePreset;
@@ -158,15 +170,23 @@ export default function SetupPage() {
         let totalCount = 0;
         let totalTagsCount = 0;
         for (const tag of selectedTag) {
-          const result = await generateDummyData(tag, effectiveStart, effectiveEnd, frequency, (tagName, records) => {
-            toast({
-              title: 'Tag complete',
-              description: `${tagName}: ${records} records generated`,
-              status: 'info',
-              duration: 4000,
-              isClosable: true,
-            });
-          });
+          const result = await generateDummyData(
+            tag,
+            effectiveStart,
+            effectiveEnd,
+            frequency,
+            (tagName, records) => {
+              toast({
+                title: 'Tag complete',
+                description: `${tagName}: ${records} records generated`,
+                status: 'info',
+                duration: 4000,
+                isClosable: true,
+              });
+            },
+            minValue,
+            maxValue
+          );
           if (result.success) {
             totalCount += result.count || 0;
             totalTagsCount += result.tags_count || 0;
@@ -185,15 +205,23 @@ export default function SetupPage() {
         });
       } else {
         // Generate for all tags
-        const result = await generateDummyData(undefined, effectiveStart, effectiveEnd, frequency, (tagName, records) => {
-          toast({
-            title: 'Tag complete',
-            description: `${tagName}: ${records} records generated`,
-            status: 'info',
-            duration: 4000,
-            isClosable: true,
-          });
-        });
+        const result = await generateDummyData(
+          undefined,
+          effectiveStart,
+          effectiveEnd,
+          frequency,
+          (tagName, records) => {
+            toast({
+              title: 'Tag complete',
+              description: `${tagName}: ${records} records generated`,
+              status: 'info',
+              duration: 4000,
+              isClosable: true,
+            });
+          },
+          minValue,
+          maxValue
+        );
 
         if (result.success) {
           const message = `Successfully generated ${result.count || 0} records for ${result.tags_count || 0} tag(s)`;
@@ -351,6 +379,39 @@ export default function SetupPage() {
                   <option value="1hour">1 record / 1 hour</option>
                 </Box>
               </FormControl>
+
+              <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={4} maxW="320px">
+                <FormControl>
+                  <FormLabel fontSize="sm" color="gray.600">
+                    Min value
+                  </FormLabel>
+                  <Input
+                    type="number"
+                    value={minValue}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (!Number.isNaN(v)) setMinValue(v);
+                    }}
+                    size="md"
+                    min={0}
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel fontSize="sm" color="gray.600">
+                    Max value
+                  </FormLabel>
+                  <Input
+                    type="number"
+                    value={maxValue}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (!Number.isNaN(v)) setMaxValue(v);
+                    }}
+                    size="md"
+                    min={0}
+                  />
+                </FormControl>
+              </SimpleGrid>
 
               <Button
                 colorScheme="blue"

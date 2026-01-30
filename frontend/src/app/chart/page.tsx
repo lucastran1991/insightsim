@@ -270,7 +270,7 @@ export default function ChartPage() {
                   isMulti={true}
                   label="Specific tags"
                 />
-                <Box mt={2}>
+                <Box mt={2} display="none">
                   <Text fontSize="xs" color="gray.500" mb={1}>
                     Selected:
                   </Text>
@@ -348,7 +348,7 @@ export default function ChartPage() {
                 <TimeModeSelector value={timeMode} onChange={setTimeMode} />
               </FormControl>
             </SimpleGrid>
-            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} alignItems="flex-end" mt={4}>
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} alignItems="flex-end" mt={4} display="none">
               <FormControl minW={0} maxW="200px">
                 <FormLabel fontSize="sm" color="gray.600">
                   Min value
@@ -409,7 +409,10 @@ export default function ChartPage() {
             aggregateMode === 'raw'
               ? filterByFrequency(data, FREQUENCY_MINUTES[frequency])
               : data;
-          chartData = filterByValueRange(chartData, minValue, maxValue);
+          // Only apply value-range filter for Raw; aggregated values are bucket sums and would be filtered out by point-based min/max
+          if (aggregateMode === 'raw') {
+            chartData = filterByValueRange(chartData, minValue, maxValue);
+          }
           return (
             <Card shadow="sm" borderRadius="lg" borderWidth="1px" borderColor="gray.100" overflow="hidden">
               <CardHeader py={4} borderBottomWidth="1px" borderColor="gray.100">
