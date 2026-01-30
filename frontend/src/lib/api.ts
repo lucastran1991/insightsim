@@ -21,6 +21,24 @@ export async function getHealthCheck(): Promise<HealthResponse> {
   return { status: text };
 }
 
+/**
+ * Fetch value_range (min, max) from backend config for use as defaults (e.g. chart value filter).
+ */
+export async function getValueRangeConfig(): Promise<{ min: number; max: number }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.config}`);
+    if (!response.ok) return { min: 1, max: 10000 };
+    const data = await response.json();
+    const vr = data?.value_range;
+    if (vr != null && typeof vr.min === 'number' && typeof vr.max === 'number') {
+      return { min: vr.min, max: vr.max };
+    }
+  } catch {
+    // ignore
+  }
+  return { min: 1, max: 10000 };
+}
+
 export type AggregateMode = 'raw' | 'daily' | 'monthly' | 'quarterly' | 'yearly';
 
 /**
@@ -69,23 +87,32 @@ export interface GenerateStreamEvent {
   message?: string;
 }
 
+export type GenerateFrequency = '1min' | '5min' | '15min' | '30min' | '1hour';
+
 /**
  * Generate dummy data (streaming). Backend sends NDJSON: tag_complete per tag, then done or error.
  * @param tag Optional tag name. If provided, only generates data for that tag.
  * @param start Optional start time (ISO 8601). If provided with end, overrides backend config time range.
  * @param end Optional end time (ISO 8601). If provided with start, overrides backend config time range.
+ * @param frequencyOrOnTagComplete Optional frequency (1 record per N minutes) or callback for backward compatibility.
  * @param onTagComplete Called when the backend finishes generating data for each tag.
  */
 export async function generateDummyData(
   tag?: string,
   start?: string,
   end?: string,
+  frequencyOrOnTagComplete?: GenerateFrequency | ((tag: string, records: number) => void),
   onTagComplete?: (tag: string, records: number) => void
 ): Promise<GenerateResponse> {
-  const payload: { tag?: string; start?: string; end?: string } = {};
+  const frequency =
+    typeof frequencyOrOnTagComplete === 'string' ? frequencyOrOnTagComplete : undefined;
+  const cb = typeof frequencyOrOnTagComplete === 'function' ? frequencyOrOnTagComplete : onTagComplete;
+
+  const payload: { tag?: string; start?: string; end?: string; frequency?: string } = {};
   if (tag) payload.tag = tag;
   if (start?.trim()) payload.start = start.trim();
   if (end?.trim()) payload.end = end.trim();
+  if (frequency) payload.frequency = frequency;
   const body = Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined;
 
   const response = await fetch(
@@ -128,7 +155,7 @@ export async function generateDummyData(
       try {
         const ev = JSON.parse(trimmed) as GenerateStreamEvent;
         if (ev.event === 'tag_complete' && ev.tag != null && ev.records != null) {
-          onTagComplete?.(ev.tag, ev.records);
+          cb?.(ev.tag, ev.records);
         } else if (ev.event === 'done') {
           result = {
             success: true,
@@ -148,7 +175,7 @@ export async function generateDummyData(
     try {
       const ev = JSON.parse(buffer.trim()) as GenerateStreamEvent;
       if (ev.event === 'tag_complete' && ev.tag != null && ev.records != null) {
-        onTagComplete?.(ev.tag, ev.records);
+        cb?.(ev.tag, ev.records);
       } else if (ev.event === 'done') {
         result = {
           success: true,

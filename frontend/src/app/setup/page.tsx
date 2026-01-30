@@ -33,7 +33,7 @@ import {
 } from 'date-fns';
 import TagSelector from '@/components/TagSelector';
 import DateRangePicker from '@/components/DateRangePicker';
-import { generateDummyData, getTagList } from '@/lib/api';
+import { generateDummyData, getTagList, type GenerateFrequency } from '@/lib/api';
 
 type GenerationMode = 'all' | 'single';
 
@@ -90,6 +90,7 @@ export default function SetupPage() {
   const [timeRangePreset, setTimeRangePreset] = useState<TimeRangePreset>(defaultPreset);
   const [fromDate, setFromDate] = useState<string>(defaultRange.start);
   const [toDate, setToDate] = useState<string>(defaultRange.end);
+  const [frequency, setFrequency] = useState<GenerateFrequency>('1min');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -129,7 +130,7 @@ export default function SetupPage() {
     if (mode === 'single' && selectedTag.length === 0) {
       toast({
         title: 'Validation Error',
-        description: 'Please select a tag when using single tag mode',
+        description: 'Please select at least one tag when using single tag mode',
         status: 'warning',
         duration: 5000,
         isClosable: true,
@@ -142,7 +143,6 @@ export default function SetupPage() {
     setSuccess(null);
 
     try {
-      const tag = mode === 'single' ? selectedTag[0] : undefined;
       // Always send start/end that match the dropdown so backend never falls back to config
       const effectiveStart =
         timeRangePreset === 'custom'
@@ -152,18 +152,29 @@ export default function SetupPage() {
         timeRangePreset === 'custom'
           ? (toDate?.trim() || defaultRange.end)
           : getTimeRangeForPreset(timeRangePreset).end;
-      const result = await generateDummyData(tag, effectiveStart, effectiveEnd, (tagName, records) => {
-        toast({
-          title: 'Tag complete',
-          description: `${tagName}: ${records} records generated`,
-          status: 'info',
-          duration: 4000,
-          isClosable: true,
-        });
-      });
 
-      if (result.success) {
-        const message = `Successfully generated ${result.count || 0} records for ${result.tags_count || 0} tag(s)`;
+      if (mode === 'single') {
+        // Generate for each selected tag
+        let totalCount = 0;
+        let totalTagsCount = 0;
+        for (const tag of selectedTag) {
+          const result = await generateDummyData(tag, effectiveStart, effectiveEnd, frequency, (tagName, records) => {
+            toast({
+              title: 'Tag complete',
+              description: `${tagName}: ${records} records generated`,
+              status: 'info',
+              duration: 4000,
+              isClosable: true,
+            });
+          });
+          if (result.success) {
+            totalCount += result.count || 0;
+            totalTagsCount += result.tags_count || 0;
+          } else {
+            throw new Error(result.message || `Generation failed for tag: ${tag}`);
+          }
+        }
+        const message = `Successfully generated ${totalCount} records for ${totalTagsCount} tag(s)`;
         setSuccess(message);
         toast({
           title: 'Success',
@@ -173,7 +184,30 @@ export default function SetupPage() {
           isClosable: true,
         });
       } else {
-        throw new Error(result.message || 'Generation failed');
+        // Generate for all tags
+        const result = await generateDummyData(undefined, effectiveStart, effectiveEnd, frequency, (tagName, records) => {
+          toast({
+            title: 'Tag complete',
+            description: `${tagName}: ${records} records generated`,
+            status: 'info',
+            duration: 4000,
+            isClosable: true,
+          });
+        });
+
+        if (result.success) {
+          const message = `Successfully generated ${result.count || 0} records for ${result.tags_count || 0} tag(s)`;
+          setSuccess(message);
+          toast({
+            title: 'Success',
+            description: message,
+            status: 'success',
+            duration: 5000,
+            isClosable: true,
+          });
+        } else {
+          throw new Error(result.message || 'Generation failed');
+        }
       }
     } catch (err) {
       const errorMessage =
@@ -229,8 +263,8 @@ export default function SetupPage() {
                     tags={tags}
                     selectedTags={selectedTag}
                     onChange={setSelectedTag}
-                    isMulti={false}
-                    placeholder="Select a tag..."
+                    isMulti={true}
+                    placeholder="Select tags..."
                   />
                 </FormControl>
               )}
@@ -285,6 +319,39 @@ export default function SetupPage() {
                 </Text>
               </FormControl>
 
+              <FormControl maxW="280px">
+                <FormLabel fontSize="sm" color="gray.600">
+                  Frequency
+                </FormLabel>
+                <Box
+                  as="select"
+                  value={frequency}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                    setFrequency(e.target.value as GenerateFrequency)
+                  }
+                  px={3}
+                  py={2}
+                  borderWidth="1px"
+                  borderColor="gray.200"
+                  borderRadius="md"
+                  bg="white"
+                  fontSize="md"
+                  _hover={{ borderColor: 'gray.300' }}
+                  _focus={{
+                    outline: 'none',
+                    borderColor: 'blue.500',
+                    boxShadow: '0 0 0 1px var(--chakra-colors-blue-500)',
+                  }}
+                  cursor="pointer"
+                >
+                  <option value="1min">1 record / 1 min</option>
+                  <option value="5min">1 record / 5 mins</option>
+                  <option value="15min">1 record / 15 mins</option>
+                  <option value="30min">1 record / 30 mins</option>
+                  <option value="1hour">1 record / 1 hour</option>
+                </Box>
+              </FormControl>
+
               <Button
                 colorScheme="blue"
                 size="md"
@@ -321,7 +388,7 @@ export default function SetupPage() {
           <AlertDescription>
             {mode === 'all'
               ? 'All tags: deletes all data, then generates.'
-              : 'Single tag: deletes that tag\'s data, then generates.'}
+              : `Selected tags: deletes selected tag${selectedTag.length !== 1 ? 's' : ''}' data, then generates.`}
           </AlertDescription>
         </Alert>
       </VStack>

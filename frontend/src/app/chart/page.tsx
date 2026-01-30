@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
 import {
   Container,
   Box,
@@ -22,6 +22,11 @@ import {
   FormLabel,
   Select,
   Button,
+  Input,
+  Tag,
+  TagLabel,
+  TagCloseButton,
+  Wrap,
 } from '@chakra-ui/react';
 import {
   format,
@@ -34,7 +39,7 @@ import {
 import TimeModeSelector, { TimeMode } from '@/components/TimeModeSelector';
 import TagSelector from '@/components/TagSelector';
 import TimeseriesChart from '@/components/TimeseriesChart';
-import { getTimeseriesData, getTagList, type AggregateMode } from '@/lib/api';
+import { getTimeseriesData, getTagList, getValueRangeConfig, type AggregateMode } from '@/lib/api';
 import { TimeseriesResponse } from '@/types/api';
 
 function escapeCsvField(field: string): string {
@@ -79,15 +84,71 @@ function downloadCsv(data: TimeseriesResponse) {
   URL.revokeObjectURL(url);
 }
 
+export type FrequencyOption = '1min' | '5min' | '15min' | '30min' | '1hour';
+
+const FREQUENCY_MINUTES: Record<FrequencyOption, number> = {
+  '1min': 1,
+  '5min': 5,
+  '15min': 15,
+  '30min': 30,
+  '1hour': 60,
+};
+
+function parseTimestamp(ts: string): number {
+  return /^\d+$/.test(ts) ? Number(ts) : new Date(ts).getTime();
+}
+
+function filterByFrequency(data: TimeseriesResponse, frequencyMinutes: number): TimeseriesResponse {
+  if (frequencyMinutes <= 1) return data;
+  const intervalMs = frequencyMinutes * 60 * 1000;
+  const result: TimeseriesResponse['result'] = {};
+  for (const tag of Object.keys(data.result)) {
+    const points = data.result[tag];
+    if (points.length === 0) {
+      result[tag] = [];
+      continue;
+    }
+    const sorted = [...points].sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
+    const baseTs = parseTimestamp(sorted[0].timestamp);
+    result[tag] = sorted.filter((p) => {
+      const t = parseTimestamp(p.timestamp);
+      const offset = t - baseTs;
+      return offset % intervalMs === 0;
+    });
+  }
+  return { result };
+}
+
+function filterByValueRange(data: TimeseriesResponse, minVal: number, maxVal: number): TimeseriesResponse {
+  const result: TimeseriesResponse['result'] = {};
+  for (const tag of Object.keys(data.result)) {
+    result[tag] = data.result[tag].filter(
+      (p) => p.value >= minVal && p.value <= maxVal
+    );
+  }
+  return { result };
+}
+
 export default function ChartPage() {
   const [timeMode, setTimeMode] = useState<TimeMode>('monthToDate');
   const [aggregateMode, setAggregateMode] = useState<AggregateMode>('daily');
+  const [frequency, setFrequency] = useState<FrequencyOption>('1min');
+  const [minValue, setMinValue] = useState<number>(0);
+  const [maxValue, setMaxValue] = useState<number>(10000);
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [data, setData] = useState<TimeseriesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
+
+  // Load value range defaults from backend config
+  useEffect(() => {
+    getValueRangeConfig().then(({ min, max }) => {
+      setMinValue(min);
+      setMaxValue(max);
+    });
+  }, []);
 
   // Load available tags on mount
   useEffect(() => {
@@ -200,14 +261,69 @@ export default function ChartPage() {
             </Heading>
           </CardHeader>
           <CardBody pt={0}>
-            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} alignItems="flex-end">
+            <SimpleGrid columns={{ base: 1, md: 4 }} spacing={6} alignItems="flex-end">
               <FormControl minW={0}>
                 <TagSelector
                   tags={tags}
                   selectedTags={selectedTags}
                   onChange={setSelectedTags}
                   isMulti={true}
+                  label="Specific tags"
                 />
+                <Box mt={2}>
+                  <Text fontSize="xs" color="gray.500" mb={1}>
+                    Selected:
+                  </Text>
+                  {selectedTags.length === 0 ? (
+                    <Text fontSize="sm" color="gray.400">
+                      No tags selected
+                    </Text>
+                  ) : (
+                    <Wrap spacing={2}>
+                      {selectedTags.map((tag) => (
+                        <Tag key={tag} size="sm" colorScheme="blue">
+                          <TagLabel>{tag}</TagLabel>
+                          <TagCloseButton
+                            onClick={() => setSelectedTags(selectedTags.filter((t) => t !== tag))}
+                          />
+                        </Tag>
+                      ))}
+                    </Wrap>
+                  )}
+                </Box>
+              </FormControl>
+              <FormControl minW={0}>
+                <FormLabel fontSize="sm" color="gray.600">
+                  Frequency
+                </FormLabel>
+                <Box
+                  as="select"
+                  value={frequency}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                    setFrequency(e.target.value as FrequencyOption)
+                  }
+                  width="100%"
+                  px={3}
+                  py={2}
+                  borderWidth="1px"
+                  borderColor="gray.200"
+                  borderRadius="md"
+                  bg="white"
+                  fontSize="md"
+                  _hover={{ borderColor: 'gray.300' }}
+                  _focus={{
+                    outline: 'none',
+                    borderColor: 'blue.500',
+                    boxShadow: '0 0 0 1px var(--chakra-colors-blue-500)',
+                  }}
+                  cursor="pointer"
+                >
+                  <option value="1min">1 record / 1 min</option>
+                  <option value="5min">1 record / 5 mins</option>
+                  <option value="15min">1 record / 15 mins</option>
+                  <option value="30min">1 record / 30 mins</option>
+                  <option value="1hour">1 record / 1 hour</option>
+                </Box>
               </FormControl>
               <FormControl minW={0}>
                 <FormLabel fontSize="sm" color="gray.600">
@@ -230,6 +346,36 @@ export default function ChartPage() {
                   Time range
                 </FormLabel>
                 <TimeModeSelector value={timeMode} onChange={setTimeMode} />
+              </FormControl>
+            </SimpleGrid>
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} alignItems="flex-end" mt={4}>
+              <FormControl minW={0} maxW="200px">
+                <FormLabel fontSize="sm" color="gray.600">
+                  Min value
+                </FormLabel>
+                <Input
+                  type="number"
+                  value={minValue}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!Number.isNaN(v)) setMinValue(v);
+                  }}
+                  step="any"
+                />
+              </FormControl>
+              <FormControl minW={0} maxW="200px">
+                <FormLabel fontSize="sm" color="gray.600">
+                  Max value
+                </FormLabel>
+                <Input
+                  type="number"
+                  value={maxValue}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!Number.isNaN(v)) setMaxValue(v);
+                  }}
+                  step="any"
+                />
               </FormControl>
             </SimpleGrid>
           </CardBody>
@@ -258,30 +404,41 @@ export default function ChartPage() {
           </Alert>
         )}
 
-        {!loading && !error && data && (
-          <Card shadow="sm" borderRadius="lg" borderWidth="1px" borderColor="gray.100" overflow="hidden">
-            <CardHeader py={4} borderBottomWidth="1px" borderColor="gray.100">
-              <Flex justify="space-between" align="center" wrap="wrap" gap={2}>
-                <Heading size="sm" fontWeight="medium" color="gray.700">
-                  Chart
-                </Heading>
-                {aggregateMode === 'raw' && (
-                  <Button
-                    size="sm"
-                    colorScheme="blue"
-                    variant="outline"
-                    onClick={() => downloadCsv(data)}
-                  >
-                    Download CSV
-                  </Button>
-                )}
-              </Flex>
-            </CardHeader>
-            <CardBody p={0}>
-              <TimeseriesChart data={data} disableAnimation={aggregateMode === 'raw'} aggregateMode={aggregateMode} />
-            </CardBody>
-          </Card>
-        )}
+        {!loading && !error && data && (() => {
+          let chartData =
+            aggregateMode === 'raw'
+              ? filterByFrequency(data, FREQUENCY_MINUTES[frequency])
+              : data;
+          chartData = filterByValueRange(chartData, minValue, maxValue);
+          return (
+            <Card shadow="sm" borderRadius="lg" borderWidth="1px" borderColor="gray.100" overflow="hidden">
+              <CardHeader py={4} borderBottomWidth="1px" borderColor="gray.100">
+                <Flex justify="space-between" align="center" wrap="wrap" gap={2}>
+                  <Heading size="sm" fontWeight="medium" color="gray.700">
+                    Chart
+                  </Heading>
+                  {aggregateMode === 'raw' && (
+                    <Button
+                      size="sm"
+                      colorScheme="blue"
+                      variant="outline"
+                      onClick={() => downloadCsv(chartData)}
+                    >
+                      Download CSV
+                    </Button>
+                  )}
+                </Flex>
+              </CardHeader>
+              <CardBody p={0}>
+                <TimeseriesChart
+                  data={chartData}
+                  disableAnimation={aggregateMode === 'raw'}
+                  aggregateMode={aggregateMode}
+                />
+              </CardBody>
+            </Card>
+          );
+        })()}
 
         {!loading && !error && !data && selectedTags.length > 0 && (
           <Alert status="info" borderRadius="lg" variant="left-accent">

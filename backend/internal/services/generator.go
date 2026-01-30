@@ -25,8 +25,9 @@ type OnTagComplete func(tag string, records int)
 
 // GenerateDummyData generates dummy data for tags from the tags table in the DB.
 // If singleTag is provided, only generate for that tag; otherwise generate for all tags.
+// intervalMinutes is the step between records (1, 5, 15, 30, or 60). Must be >= 1.
 // If onTagComplete is non-nil, it is called after each tag completes with the tag name and record count.
-func (g *Generator) GenerateDummyData(minValue, maxValue float64, useSequential bool, startTimeStr, endTimeStr string, singleTag string, onTagComplete OnTagComplete) (int, int, error) {
+func (g *Generator) GenerateDummyData(minValue, maxValue float64, useSequential bool, startTimeStr, endTimeStr string, singleTag string, intervalMinutes int, onTagComplete OnTagComplete) (int, int, error) {
 	generateStartTime := time.Now()
 
 	tags, err := g.db.ListTagNamesFromTagsTable()
@@ -82,6 +83,10 @@ func (g *Generator) GenerateDummyData(minValue, maxValue float64, useSequential 
 	// Validate that start time is before end time
 	if startTime.After(endTime) || startTime.Equal(endTime) {
 		return 0, 0, fmt.Errorf("invalid time range: generation_start_time (%s) must be before generation_end_time (%s)", startTimeStr, endTimeStr)
+	}
+
+	if intervalMinutes < 1 {
+		intervalMinutes = 1
 	}
 
 	// Calculate total minutes
@@ -145,8 +150,8 @@ func (g *Generator) GenerateDummyData(minValue, maxValue float64, useSequential 
 	rand.Seed(time.Now().UnixNano())
 
 	// Log generation start
-	fmt.Printf("[GENERATE] Starting generation for %d tags, time range: %s to %s, value range: %.2f-%.2f\n",
-		len(tags), startTime.Format("2006-01-02 15:04:05"), endTime.Format("2006-01-02 15:04:05"), minValue, maxValue)
+	fmt.Printf("[GENERATE] Starting generation for %d tags, interval: %d min, time range: %s to %s, value range: %.2f-%.2f\n",
+		len(tags), intervalMinutes, startTime.Format("2006-01-02 15:04:05"), endTime.Format("2006-01-02 15:04:05"), minValue, maxValue)
 
 	// Process each tag
 	for _, tag := range tags {
@@ -166,8 +171,8 @@ func (g *Generator) GenerateDummyData(minValue, maxValue float64, useSequential 
 			currentValue = baseValue
 		}
 
-		// Generate records for each minute
-		for minute := 0; minute < totalMinutes; minute++ {
+		// Generate records at the selected interval (e.g. every 1, 5, 15, 30, or 60 minutes)
+		for minute := 0; minute < totalMinutes; minute += intervalMinutes {
 			currentTime := startTime.Add(time.Duration(minute) * time.Minute)
 			timestamp := currentTime.UnixMilli()
 

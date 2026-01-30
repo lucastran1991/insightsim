@@ -26,6 +26,7 @@ interface TagSelectorProps {
   onChange: (tags: string[]) => void;
   isMulti?: boolean;
   placeholder?: string;
+  label?: string;
 }
 
 export default function TagSelector({
@@ -34,7 +35,9 @@ export default function TagSelector({
   onChange,
   isMulti = true,
   placeholder = 'Select tags...',
+  label,
 }: TagSelectorProps) {
+  const displayLabel = label ?? (isMulti ? 'Tags' : 'Tag');
   const [searchKeyword, setSearchKeyword] = useState('');
 
   // Filter tags locally based on search keyword (case-insensitive)
@@ -49,7 +52,7 @@ export default function TagSelector({
   if (isMulti) {
     return (
       <FormControl>
-        <FormLabel>Tags</FormLabel>
+        <FormLabel>{displayLabel}</FormLabel>
         <Menu closeOnSelect={false} onClose={() => setSearchKeyword('')}>
           <MenuButton
             as={Button}
@@ -108,7 +111,7 @@ export default function TagSelector({
 
   return (
     <FormControl>
-      <FormLabel>Tag</FormLabel>
+      <FormLabel>{displayLabel}</FormLabel>
       <Select
         value={selectedTags[0] || ''}
         onChange={(e) => onChange(e.target.value ? [e.target.value] : [])}

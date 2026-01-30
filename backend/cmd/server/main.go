@@ -76,6 +76,7 @@ func main() {
 	loadHandler := handlers.NewLoadHandler(loader, cfg.Data.RawDataFolder)
 	queryHandler := handlers.NewQueryHandler(queryService)
 	generatorHandler := handlers.NewGeneratorHandler(generator, minValue, maxValue, useSequential, startTime, endTime)
+	configHandler := handlers.NewConfigHandler(minValue, maxValue)
 	uploadHandler := handlers.NewUploadHandler(uploadService)
 	tagsHandler := handlers.NewTagsHandler(tagsService)
 
@@ -84,6 +85,7 @@ func main() {
 
 	// API routes
 	api := router.PathPrefix("/api").Subrouter()
+	api.HandleFunc("/config", configHandler.Handle).Methods("GET")
 	api.HandleFunc("/load", loadHandler.Handle).Methods("POST")
 	api.HandleFunc("/generate-dummy", generatorHandler.Handle).Methods("POST")
 	api.HandleFunc("/upload-csv", uploadHandler.Handle).Methods("POST")
@@ -118,6 +120,7 @@ func main() {
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("Server starting on %s", addr)
 	log.Printf("API endpoints:")
+	log.Printf("  GET  /api/config")
 	log.Printf("  POST /api/load")
 	log.Printf("  POST /api/generate-dummy")
 	log.Printf("  POST /api/upload-csv")

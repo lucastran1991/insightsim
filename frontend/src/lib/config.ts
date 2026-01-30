@@ -16,6 +16,7 @@ export const API_BASE_URL =
 
 export const API_ENDPOINTS = {
   health: '/health',
+  config: '/api/config',
   load: '/api/load',
   generateDummy: '/api/generate-dummy',
   timeseriesData: '/api/timeseriesdata',

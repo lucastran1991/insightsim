@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"insightsim/internal/services"
 )
@@ -42,9 +43,12 @@ func NewGeneratorHandler(generator *services.Generator, minValue, maxValue float
 
 // GenerateRequest represents the request body for generate-dummy endpoint
 type GenerateRequest struct {
-	Tag   string `json:"tag,omitempty"`   // Optional: if provided, only generate for this tag
-	Start string `json:"start,omitempty"` // Optional: start time (ISO 8601). If set, overrides config.
-	End   string `json:"end,omitempty"`   // Optional: end time (ISO 8601). If set, overrides config.
+	Tag       string   `json:"tag,omitempty"`       // Optional: if provided, only generate for this tag
+	Start     string   `json:"start,omitempty"`     // Optional: start time (ISO 8601). If set, overrides config.
+	End       string   `json:"end,omitempty"`       // Optional: end time (ISO 8601). If set, overrides config.
+	Frequency string   `json:"frequency,omitempty"` // Optional: 1min, 5min, 15min, 30min, 1hour. Default 1min.
+	MinValue  *float64 `json:"minValue,omitempty"`  // Optional: override config value range min.
+	MaxValue  *float64 `json:"maxValue,omitempty"`  // Optional: override config value range max.
 }
 
 // GenerateResponse represents the response from generate-dummy endpoint
@@ -89,8 +93,38 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		endTime = req.End
 	}
 
-	fmt.Printf("[API] POST /api/generate-dummy - Starting generation for %s (value range: %.2f-%.2f, mode: %s, time range: %s to %s)\n",
-		tagInfo, h.minValue, h.maxValue, mode, startTime, endTime)
+	// Parse frequency: 1min, 5min, 15min, 30min, 1hour (case-insensitive). Default 1.
+	intervalMinutes := 1
+	switch strings.ToLower(strings.TrimSpace(req.Frequency)) {
+	case "5min":
+		intervalMinutes = 5
+	case "15min":
+		intervalMinutes = 15
+	case "30min":
+		intervalMinutes = 30
+	case "1hour":
+		intervalMinutes = 60
+	default:
+		// 1min or empty/invalid
+		intervalMinutes = 1
+	}
+
+	// Use request min/max if provided; otherwise use config defaults
+	effectiveMin := h.minValue
+	effectiveMax := h.maxValue
+	if req.MinValue != nil {
+		effectiveMin = *req.MinValue
+	}
+	if req.MaxValue != nil {
+		effectiveMax = *req.MaxValue
+	}
+	if effectiveMin >= effectiveMax {
+		http.Error(w, "minValue must be less than maxValue", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Printf("[API] POST /api/generate-dummy - Starting generation for %s (value range: %.2f-%.2f, mode: %s, interval: %d min, time range: %s to %s)\n",
+		tagInfo, effectiveMin, effectiveMax, mode, intervalMinutes, startTime, endTime)
 
 	// Stream NDJSON: set headers and prepare flusher
 	w.Header().Set("Content-Type", "application/x-ndjson")
@@ -111,7 +145,7 @@ func (h *GeneratorHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		writeEvent(streamEvent{Event: "tag_complete", Tag: tag, Records: records})
 	}
 
-	count, tagsCount, err := h.generator.GenerateDummyData(h.minValue, h.maxValue, h.useSequential, startTime, endTime, req.Tag, onTagComplete)
+	count, tagsCount, err := h.generator.GenerateDummyData(effectiveMin, effectiveMax, h.useSequential, startTime, endTime, req.Tag, intervalMinutes, onTagComplete)
 	if err != nil {
 		writeEvent(streamEvent{Event: "error", Message: err.Error()})
 		return
